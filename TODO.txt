@@ -1,5 +1,7 @@
 http://www.cs.princeton.edu/courses/archive/spr11/cos426/assignment2.html
 
+*EM Scenes
+
 *Remeshing
 -
 *Subdivision functions
