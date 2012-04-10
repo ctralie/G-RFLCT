@@ -16,7 +16,7 @@ class EMNode(object):
 
 class EMScene(object):
 	def EMScene(self):
-		
+		self.root = None
 
 
 class AcousticNode { 
