@@ -1,14 +1,16 @@
 from Primitives3D import *
 from Graphics3D import *
 from Shapes3D import *
+from PolyMesh import *
+from OpenGL.GL import *
 import math
 import elementtree.ElementTree as ET
+#TODO: Switch to lxml so I can get line numbers with my errors
 
 class EMMaterial(object):
 	def __init__(self, R = 1.0, T = 0.0):
 		self.R = R;#Reflection coefficient
 		self.T = T;#Transmission coefficient
-		
 
 class EMNode(object):
 	#Make identity matrix by default
@@ -26,10 +28,14 @@ class EMNode(object):
 		self.OpticalMat = OpticalMat
 
 class EMScene(object):
-	def EMScene(self):
-		self.root = EMNode
+	def __init__(self):
+		self.rootEMNode = EMNode()
 
-	def Read(self, filename = '', EMMaterials = {}, OpticalMaterials = {},  EMNode = self.root, XMLNode = None):
+	def Read(self, filename):
+		parentNode = self.rootEMNode
+		self.ReadRecurse(filename, {}, {}, parentNode, None)
+
+	def ReadRecurse(self, filename = '', EMMaterials = {}, OpticalMaterials = {},  EMParentNode = None, XMLNode = None):
 		if (len(filename) > 0):
 			tree = ET.parse(filename)
 			XMLNode = tree.getroot()
@@ -62,18 +68,110 @@ class EMScene(object):
 					R = float(mat.get("R"))
 					T = float(mat.get("T"))
 					EMMaterials[name] = EMMaterial(R, T)
-
 		for currNode in XMLNode.getchildren():
+			EMMat = EMMaterial()
+			OpticalMat = OpticalMaterial()
+			#Get materials (if specified...otherwise use defaults)
+			if currNode.tag in ["tri", "box", "mesh"]:
+				if currNode.get("em") != None:
+					EMMat = EMMaterials[currNode.get("em")]
+				if currNode.get("om") != None:
+					OpticalMat = OpticalMaterials[currNode.get("om")]
+			#Get transformation matrix (if it exists...otherwise use identity matrix)
+			matrix = Matrix4()
+			if currNode.tag in ["tri", "box", "mesh", "node", "include"]:
+				if currNode.text != None:
+					m = [float(i) for i in currNode.text.split()]
+					if len(m) == 16:
+						matrix = Matrix4(m)
+					elif len(m) != 0:
+						print "Invalid transformation matrix specification %s"%(currNode.text)
+						return
+			#Now process tag-specific elements	
 			if currNode.tag == "tri":
-				args = ["om", "em", "P0", "P1", "P2"]
+				args = ["P0", "P1", "P2"]
 				for arg in args:
 					if currNode.get(arg) == None:
 						print "Error: No %s defined in triangle"%(arg)
 						return
-				#Get material
-				EMMat = EMMaterials[currNode.get("om")]
-				OpticalMat = EMMaterials[currNode.get("em")]
-				P0 = [float(i) for i in currNode.get("P0").split()]
-				P1 = [float(i) for i in currNode.get("P1").split()]
-				P2 = [float(i) for i in currNode.get("P2").split()]
+				P0args = [float(i) for i in currNode.get("P0").split()]
+				P1args = [float(i) for i in currNode.get("P1").split()]
+				P2args = [float(i) for i in currNode.get("P2").split()]
+				P0 = Point3D(P0args[0], P0args[1], P0args[2])
+				P1 = Point3D(P1args[0], P1args[1], P1args[2])
+				P2 = Point3D(P2args[0], P2args[1], P2args[2])
+				mesh = PolyMesh()
+				[V0, V1, V2] = [mesh.addVertex(P0), mesh.addVertex(P1), mesh.addVertex(P2)]
+				mesh.addFace([V0, V1, V2])
+				sceneNode = EMNode(EMParentNode, mesh, matrix, EMMat, OpticalMat)
+				EMParentNode.children.append(sceneNode)
+			if currNode.tag == "box":
+				args = ["length", "width", "height"]
+				for arg in args:
+					if currNode.get(arg) == None:
+						print "Error: No %s defined in box"%(arg)
+						return
+				L = float(currNode.get("length")) #Length in z
+				W = float(currNode.get("width")) #Width in x
+				H = float(currNode.get("height")) #Height in y
+				mesh = getBoxMesh(L, W, H)
+				sceneNode = EMNode(EMParentNode, mesh, matrix, EMMat, OpticalMat)
+				EMParentNode.children.append(sceneNode)			
+			if currNode.tag == "mesh":
+				args = ["filename"]
+				for arg in args:
+					if currNode.get(arg) == None:
+						print "Error: No %s defined in mesh"%(arg)
+						return
+				meshfilename = currNode.get("filename")
+				mesh = PolyMesh()
+				mesh.loadFile(meshfilename)
+				sceneNode = EMNode(EMParentNode, mesh, matrix, EMMat, OpticalMat)
+				EMParentNode.children.append(sceneNode)
+			if currNode.tag == "node":
+				#This is a transformation node in the graph
+				sceneNode = EMNode(parent = EMParentNode, transformation = matrix)
+				EMParentNode.children.append(sceneNode)
+				#Now recursively add the branch in this node
+				self.ReadRecurse('', EMMaterials, OpticalMaterials, sceneNode, currNode)
+			if currNode.tag == "include":
+				#Recursively include another scene file as a branch in this tree
+				if currNode.get("filename") == None:
+					print "Error: No filename defined for included scene"
+					return
+				nextfilename = currNode.get("filename")
+				sceneNode = EMNode(parent = EMParentNode)
+				EMParentNode.children.append(sceneNode)
+				self.ReadRecurse(nextfilename, {}, {}, matrix, sceneNode, None)
 
+	def renderGLRecurse(self, currEMNode, matrix):
+		for child in currEMNode.children:
+			transform = matrix*child.transformation
+			if len(child.children) > 0:
+				self.renderGLRecurse(child, transform)
+			if child.mesh != None:
+				#Set optical material
+				glEnable(GL_LIGHTING)
+				ka = child.OpticalMat.ka
+				kd = child.OpticalMat.kd
+				ks = child.OpticalMat.ks
+				emission = child.OpticalMat.emission
+				glMaterialfv(GL_FRONT, GL_AMBIENT, [ka.R, ka.G, ka.B, ka.A])
+				glMaterialfv(GL_FRONT, GL_DIFFUSE, [kd.R, kd.G, kd.B, kd.A])
+				glMaterialfv(GL_FRONT, GL_SPECULAR, [ks.R, ks.G, ks.B, ks.A])
+				#TODO: Include shininess in Optical Material Spec??
+				glMaterialf(GL_FRONT, GL_SHININESS, 80)
+				#Now draw
+				#NOTE: I'm row major and GL is column major
+				#so need to do transpose
+				glPushMatrix()
+				glMultMatrixd(transform.Transpose().m)
+				child.mesh.renderGL()
+				glPopMatrix()
+	
+	def renderGL(self):
+		self.renderGLRecurse(self.rootEMNode, self.rootEMNode.transformation)
+
+if __name__ == '__main__':
+	scene = EMScene()
+	scene.Read('test.xml')

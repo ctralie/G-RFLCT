@@ -25,8 +25,10 @@ class MeshVertex(object):
 		ret = set()
 		i = 0
 		for edge in self.edges:
-			ret.add(edge.f1)
-			ret.add(edge.f2)
+			if (edge.f1 != None):
+				ret.add(edge.f1)
+			if (edge.f2 != None):
+				ret.add(edge.f2)
 		return ret
 	
 	#Get an estimate of the vertex normal by taking a weighted
@@ -632,6 +634,29 @@ class PolyMesh(object):
 		nF = len(self.faces)
 		topology = nV-nE+nF
 		return "PolyMesh Object: NVertices = %i, NEdges = %i, NFaces = %i, topology=%i"%(nV, nE, nF, topology)	
+
+def getBoxMesh(L = 1, W = 1, H = 1):
+	P1 = Point3D(-W/2, -H/2, L/2)
+	P2 = Point3D(W/2, -H/2, L/2)
+	P3 = Point3D(W/2, H/2, L/2)
+	P4 = Point3D(-W/2, H/2, L/2)
+	P5 = Point3D(-W/2, -H/2, -L/2)
+	P6 = Point3D(W/2, -H/2, -L/2)
+	P7 = Point3D(W/2, H/2, -L/2)
+	P8 = Point3D(-W/2, H/2, -L/2)
+	mesh = PolyMesh()
+	[V1, V2] = [mesh.addVertex(P1), mesh.addVertex(P2)]
+	[V3, V4] = [mesh.addVertex(P3), mesh.addVertex(P4)]
+	[V5, V6] = [mesh.addVertex(P5), mesh.addVertex(P6)]
+	[V7, V8] = [mesh.addVertex(P7), mesh.addVertex(P8)]
+	#Add faces with vertices specified in clockwise order
+	mesh.addFace([V1, V2, V3, V4]) #Front face
+	mesh.addFace([V8, V7, V6, V5]) #Back face
+	mesh.addFace([V4, V8, V5, V1]) #Left face
+	mesh.addFace([V6, V7, V3, V2]) #Right face
+	mesh.addFace([V4, V3, V7, V8]) #Top face
+	mesh.addFace([V2, V1, V5, V6]) #Bottom face
+	return mesh
 
 if __name__ == '__main__':
 	mesh = PolyMesh()
