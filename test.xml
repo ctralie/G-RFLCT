@@ -17,13 +17,18 @@
 			kt = "0 0 0 "
 			emission = "0 0 0 "/>
 	</OpticalMaterials>
-	
-	<node>
+	<box length = "1" width = "1" height = "1">
+		1 2 0 1
+		1 0 0 0
+		0 0 1 0
+		0 0 0 1
+	</box>
+	<!--<node>
 		1 0 0 0
 		0 1 0 0
 		0 0 1 0
 		0 0 0 1
-		<!--<tri em = "reflective" P0 = "1 0 0" P1 = "1 0 1" P2 = "1 1 1"/>!-->
+		<tri em = "reflective" P0 = "1 0 0" P1 = "1 0 1" P2 = "1 1 1"/>
 		<box width = "10" height = "20" length = "5"/>
 		<mesh filename="meshes/homer.off" om = "bluish">
 			1 0 0 0
@@ -55,5 +60,5 @@
 				0 0 0 1
 			</mesh>
 		</node>
-	</node>	
+	</node>!-->
 </EMScene>

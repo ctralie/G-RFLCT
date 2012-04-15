@@ -21,7 +21,7 @@ class Ray3D(object):
 	
 	def Transform(self, matrix):
 		self.P0 = matrix*self.P0
-		self.V = matrix.getUpperLeft3x3() * self.V
+		self.V = matrix.getUpperLeft3x3()*self.V
 		self.V.normalize()
 
 

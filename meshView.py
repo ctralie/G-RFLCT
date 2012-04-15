@@ -113,12 +113,12 @@ class Viewer(object):
 		dX = self.GLUTmouse[0] - lastX
 		dY = self.GLUTmouse[1] - lastY
 		if self.GLUTButton[2] == 1:
-			self.camera.zoom(-dY)
+			self.camera.zoom(dY)
 		elif self.GLUTButton[1] == 1:
 			self.camera.translate(dX, dY)
 		else:
-			self.camera.orbitLeftRight(-dX)
-			self.camera.orbitUpDown(-dY)
+			self.camera.orbitLeftRight(dX)
+			self.camera.orbitUpDown(dY)
 		glutPostRedisplay()
 	
 	def initGL(self):

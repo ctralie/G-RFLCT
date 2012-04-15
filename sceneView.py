@@ -5,6 +5,7 @@ from Primitives3D import *
 from PolyMesh import *
 from Cameras3D import *
 from EMScene import *
+from RayTraceImage import *
 from sys import argv
 import random
 
@@ -56,22 +57,20 @@ class Viewer(object):
 		glEnable(GL_LIGHTING)
 
 		self.scene.renderGL()
-		if len(self.rayPoints) > 0:
-			glDisable(GL_LIGHTING)
-			glColor3f(1, 0, 0)
-			glBegin(GL_LINES)
-			[P0, P1] = [self.rayPoints[0], self.rayPoints[1]]
-			glVertex3f(P0.x, P0.y, P0.z)
-			glVertex3f(P1.x, P1.y, P1.z)
-			glEnd()
-		if len(self.rayNormals) > 0:
-			glDisable(GL_LIGHTING)
-			glColor3f(0, 0, 1)
-			glBegin(GL_LINES)
-			[P0, P1] = [self.rayNormals[0], self.rayNormals[1]]
-			glVertex3f(P0.x, P0.y, P0.z)
-			glVertex3f(P1.x, P1.y, P1.z)
-			glEnd()		
+		
+		glDisable(GL_LIGHTING)
+		glColor3f(1, 0, 0)
+		glBegin(GL_LINES)
+		for P in self.rayPoints:
+			glVertex3f(P.x, P.y, P.z)
+		glEnd()
+		
+		glDisable(GL_LIGHTING)
+		glColor3f(0, 0, 1)
+		glBegin(GL_LINES)
+		for P in self.rayNormals:
+			glVertex3f(P.x, P.y, P.z)
+		glEnd()		
 		
 		#self.eyePoints.append(self.camera.eye)
 		#glDisable(GL_LIGHTING)
@@ -103,12 +102,25 @@ class Viewer(object):
 			self.drawVerts = 1 - self.drawVerts
 		elif key in ['r', 'R']:
 			#Launch some rays for debugging
-			ray = Ray3D(self.camera.eye, -self.camera.towards)
-			intersection = self.scene.getRayIntersection(ray)
-			print intersection[2]
-			if intersection != None:
-				self.rayPoints = [self.camera.eye, intersection[1]]
-				self.rayNormals = [intersection[1], intersection[1]+0.1*intersection[2]]
+			res = 10
+			self.rayPoints = []
+			self.rayNormals = []
+			towards = self.camera.towards
+			up = self.camera.up
+			right = towards % up
+			for x in range(-res, res+1):
+				for y in range(-res, res+1):
+					direct = towards + float(x)/float(res)*right + float(y)/float(res)*up
+					direct.normalize()
+					ray = Ray3D(self.camera.eye, direct)
+					intersection = self.scene.getRayIntersection(ray)
+					if intersection != None:
+						self.rayPoints.append(self.camera.eye)
+						self.rayPoints.append(intersection[1])
+						self.rayNormals.append(intersection[1])
+						self.rayNormals.append(intersection[1]+0.1*intersection[2])
+		elif key in ['t', 'T']:
+			RayTraceImage(self.scene, self.camera, 100, 100, "out.png")
 		glutPostRedisplay()
 	
 	def GLUTSpecial(self, key, x, y):
@@ -137,12 +149,12 @@ class Viewer(object):
 		dX = self.GLUTmouse[0] - lastX
 		dY = self.GLUTmouse[1] - lastY
 		if self.GLUTButton[2] == 1:
-			self.camera.zoom(-dY)
+			self.camera.zoom(dY)
 		elif self.GLUTButton[1] == 1:
 			self.camera.translate(dX, dY)
 		else:
-			self.camera.orbitLeftRight(-dX)
-			self.camera.orbitUpDown(-dY)
+			self.camera.orbitLeftRight(dX)
+			self.camera.orbitUpDown(dY)
 		glutPostRedisplay()
 	
 	def initGL(self):

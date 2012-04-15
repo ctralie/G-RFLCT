@@ -193,21 +193,27 @@ class EMScene(object):
 	def getRayIntersection(self, ray):
 		t = float("inf")
 		Point = None
-		Normal = None
+		face = None
+		transform = None
 		for m in self.meshes:
 			thisRay = ray.Copy()
 			thisRay.Transform(m.transform.Inverse())
 			intersection = m.getRayIntersection(thisRay)
 			if intersection != None:
 				thisPoint = m.transform*intersection[1]
-				thisNormal = m.transform.getUpperLeft3x3()*intersection[2]
+				thisFace = intersection[2]
 				dVec = thisPoint - ray.P0
 				this_t = dVec.Length()
 				if this_t < t:
 					t = this_t
 					Point = thisPoint
-					Normal = thisNormal
+					face = thisFace
+					transform = m.transform
 		if isinstance(Point, Point3D):
+			verts = face.getVertices()
+			[P0, P1, P2] = [transform*verts[i].pos for i in range(0, 3)]
+			Normal = (P2-P0)%(P1-P0)
+			Normal.normalize()
 			return (t, Point, Normal)
 		return None
 			

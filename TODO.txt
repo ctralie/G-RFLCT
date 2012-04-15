@@ -1,8 +1,11 @@
 http://www.cs.princeton.edu/courses/archive/spr11/cos426/assignment2.html
 
 EM Scene and Ray Tracing Stuff
+*Fix cameras (3)
 *Bounding box acceleration (1)
+*Add more complex intersection object instead of returning list (1)
 *Bounding interval mesh acceleration (3)
+*Fix normals for shear matrices (2)
 *Phong Illumination Images for Debugging (2)
 
 *Remeshing

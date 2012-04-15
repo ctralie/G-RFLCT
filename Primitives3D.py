@@ -25,6 +25,9 @@ class Vector3D(object):
 			self.y = self.y/mag
 			self.z = self.z/mag
 	
+	def Normalize(self):
+		self.normalize()
+	
 	def __add__(self, other):
 		if isinstance(other, Point3D):#A Point plus a vector is still a point
 			return other + self

@@ -182,22 +182,22 @@ class MouseSphericalCamera(object):
 		self.zP = Point3D(0, 0, 0) #Zero Point (used for axis rotation)
 		self.center = Point3D(0, 0, 0)
 		self.eye = Point3D(1, 0, 0)
-		self.towards = Vector3D(-1, 0, 0)
+		self.towards = Vector3D(0, 0, -1)
 		self.up = Vector3D(0, 1, 0)
 
 	def centerOnMesh(self, mesh):
 		bbox = mesh.getBBox()
 		self.center = bbox.getCenter()
-		self.towards = Vector3D(-1, 0, 0)
+		self.towards = Vector3D(0, 0, -1)
 		self.up = Vector3D(0, 1, 0)
-		self.eye = self.center + (bbox.XLen()*3)*self.towards
+		self.eye = self.center - (bbox.XLen()*3)*self.towards
 
 	def gotoCameraFrame(self):
 		t = self.towards
 		u = self.up
 		r = t%u
 		P = self.eye
-		rotMat = Matrix4([r.x, u.x, t.x, 0, r.y, u.y, t.y, 0, r.z, u.z, t.z, 0, 0, 0, 0, 1])
+		rotMat = Matrix4([r.x, u.x, -t.x, 0, r.y, u.y, -t.y, 0, r.z, u.z, -t.z, 0, 0, 0, 0, 1])
 		rotMat = rotMat.Inverse()
 		transMat = Matrix4([1, 0, 0, -P.x, 0, 1, 0, -P.y, 0, 0, 1, -P.z, 0, 0, 0, 1])
 		mat = rotMat*transMat
@@ -220,9 +220,9 @@ class MouseSphericalCamera(object):
 	
 	def zoom(self, rate):
 		rate = 6.0*rate / float(self.pixHeight)
-		R = self.eye - self.center
+		R = self.center - self.eye
 		self.eye = self.eye + (rate*pow(2,rate/R.squaredMag()))*self.towards
-		self.towards = self.eye - self.center
+		self.towards = self.center - self.eye
 		self.towards.normalize()
 	
 	def translate(self, dx, dy):
