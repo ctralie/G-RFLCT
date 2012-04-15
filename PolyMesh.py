@@ -1,7 +1,7 @@
-#Winged Edge Mesh Object
 from Primitives3D import *
 from Shapes3D import *
 from OpenGL.GL import *
+from Graphics3D import *
 import sys
 import re
 
@@ -133,6 +133,9 @@ class MeshFace(object):
 			glVertex3f(P1.x, P1.y, P1.z)
 			glVertex3f(P2.x, P2.y, P2.z)
 		glEnd()
+	
+	def getPlane(self):
+		return Plane3D(self.startV.pos, self.getNormal())
 
 class MeshEdge(object):
 	def __init__(self, v1, v2, ID):
@@ -628,6 +631,26 @@ class PolyMesh(object):
 				glEnd()
 				glEnable(GL_LIGHTING)				
 	
+	#Slow version with no spatial subdivision
+	def getRayIntersection(self, ray):
+		t = float("inf")
+		Point = None
+		for f in self.faces:
+			intersection = ray.intersectMeshFace(f)
+			if intersection != None:
+				if intersection[0] < t:
+					t = intersection[0]
+					Point = intersection[1]
+		if isinstance(Point, Point3D):
+			return (t, Point)
+		return None
+	
+	#Transformations are simple because geometry information is only
+	#stored in the vertices
+	def Transform(self, matrix):
+		for v in self.vertices:
+			v.pos = matrix*v.pos
+	
 	def __str__(self):
 		nV = len(self.vertices)
 		nE = len(self.edges)
@@ -649,7 +672,8 @@ def getBoxMesh(L = 1, W = 1, H = 1):
 	[V3, V4] = [mesh.addVertex(P3), mesh.addVertex(P4)]
 	[V5, V6] = [mesh.addVertex(P5), mesh.addVertex(P6)]
 	[V7, V8] = [mesh.addVertex(P7), mesh.addVertex(P8)]
-	#Add faces with vertices specified in clockwise order
+	#Add faces with vertices specified in counter-clockwise 
+	#order with respect to the face normal
 	mesh.addFace([V1, V2, V3, V4]) #Front face
 	mesh.addFace([V8, V7, V6, V5]) #Back face
 	mesh.addFace([V4, V8, V5, V1]) #Left face

@@ -26,14 +26,17 @@ class EMNode(object):
 		self.transformation = transformation
 		self.EMMat = EMMat
 		self.OpticalMat = OpticalMat
+		#TODO: Add bounding boxes
 
 class EMScene(object):
 	def __init__(self):
 		self.rootEMNode = EMNode()
+		self.meshes = [] #Keep a list of meshes in the scene
 
 	def Read(self, filename):
 		parentNode = self.rootEMNode
 		self.ReadRecurse(filename, {}, {}, parentNode, None)
+		self.getMeshList()
 
 	def ReadRecurse(self, filename = '', EMMaterials = {}, OpticalMaterials = {},  EMParentNode = None, XMLNode = None):
 		if (len(filename) > 0):
@@ -144,6 +147,20 @@ class EMScene(object):
 				EMParentNode.children.append(sceneNode)
 				self.ReadRecurse(nextfilename, {}, {}, matrix, sceneNode, None)
 
+	def getMeshListRecurse(self, currEMNode, meshes, matrix):
+		for child in currEMNode.children:
+			transform = matrix*child.transformation
+			if len(child.children) > 0:
+				self.getMeshListRecurse(child, meshes, transform)
+			if child.mesh != None:
+				meshes.append(child.mesh)
+				child.mesh.transform = transform
+
+	def getMeshList(self):
+		self.meshes = []
+		self.getMeshListRecurse(self.rootEMNode, self.meshes, self.rootEMNode.transformation)
+		
+
 	def renderGLRecurse(self, currEMNode, matrix):
 		for child in currEMNode.children:
 			transform = matrix*child.transformation
@@ -171,7 +188,23 @@ class EMScene(object):
 	
 	def renderGL(self):
 		self.renderGLRecurse(self.rootEMNode, self.rootEMNode.transformation)
-
+	
+	#TODO: Add better recursive intersect method with bounding box tests
+	def getRayIntersection(self, ray):
+		t = float("inf")
+		Point = None
+		for m in self.meshes:
+			thisRay = ray.Copy()
+			thisRay.Transform(m.transform.Inverse())
+			intersection = m.getRayIntersection(thisRay)
+			if intersection != None:
+				if intersection[0] < t:
+					t = intersection[0]
+					Point = intersection[1]
+		if isinstance(Point, Point3D):
+			return (t, Point)
+		return None
+			
 if __name__ == '__main__':
 	scene = EMScene()
 	scene.Read('test.xml')

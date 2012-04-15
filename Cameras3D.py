@@ -1,3 +1,5 @@
+#TODO: These cameras need some serious work; I screwed up the coordinate systems
+#and made them left-handed by accident 
 from OpenGL.GL import *
 from OpenGL.GLU import *
 from OpenGL.GLUT import *
@@ -188,18 +190,21 @@ class MouseSphericalCamera(object):
 		self.center = bbox.getCenter()
 		self.towards = Vector3D(-1, 0, 0)
 		self.up = Vector3D(0, 1, 0)
-		self.eye = self.center - (bbox.XLen()*3)*self.towards
-		
+		self.eye = self.center + (bbox.XLen()*3)*self.towards
 
 	def gotoCameraFrame(self):
 		t = self.towards
 		u = self.up
-		r = t % u
-		mat = [r.x, u.x, t.x, 0, r.y, u.y, t.y, 0, r.z, u.z, t.z, 0, 0, 0, 0, 1]
+		r = t%u
+		P = self.eye
+		rotMat = Matrix4([r.x, u.x, t.x, 0, r.y, u.y, t.y, 0, r.z, u.z, t.z, 0, 0, 0, 0, 1])
+		rotMat = rotMat.Inverse()
+		transMat = Matrix4([1, 0, 0, -P.x, 0, 1, 0, -P.y, 0, 0, 1, -P.z, 0, 0, 0, 1])
+		mat = rotMat*transMat
+		mat = mat.Transpose()
 		glMatrixMode(GL_MODELVIEW)
 		glLoadIdentity()
-		glMultMatrixd(mat)
-		glTranslated(self.eye.x, self.eye.y, self.eye.z)
+		glMultMatrixd(mat.m)
 	
 	def orbitUpDown(self, dTheta):
 		dTheta = 1.5*dTheta / float(self.pixHeight)
@@ -216,8 +221,8 @@ class MouseSphericalCamera(object):
 	def zoom(self, rate):
 		rate = 6.0*rate / float(self.pixHeight)
 		R = self.eye - self.center
-		self.eye = self.eye - (rate*pow(2,rate/R.squaredMag()))*self.towards
-		self.towards = self.center - self.eye
+		self.eye = self.eye + (rate*pow(2,rate/R.squaredMag()))*self.towards
+		self.towards = self.eye - self.center
 		self.towards.normalize()
 	
 	def translate(self, dx, dy):
@@ -225,8 +230,8 @@ class MouseSphericalCamera(object):
 		dx = length*dx / float(self.pixWidth)
 		dy = length*dy / float(self.pixHeight)
 		right = self.towards % self.up
-		self.eye = self.eye + dx*right + dy*self.up
-		self.center = self.center + dx*right + dy*self.up
+		self.eye = self.eye - dx*right - dy*self.up
+		self.center = self.center - dx*right - dy*self.up
 
 	def __str__(self):
 		right = self.towards % self.up

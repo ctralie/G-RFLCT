@@ -1,9 +1,12 @@
 http://www.cs.princeton.edu/courses/archive/spr11/cos426/assignment2.html
 
-*EM Scenes
+EM Scene and Ray Tracing Stuff
+*Bounding box acceleration (1)
+*Bounding interval mesh acceleration (3)
+*Phong Illumination Images for Debugging (2)
 
 *Remeshing
--
+*Fix truncate
 *Subdivision functions
 -Loop Subdivision
 

@@ -281,7 +281,35 @@ def are2DConvex(verts):
 		lastCross = cross
 	return True
 
+class Plane3D(object):
+	#P0 is some point on the plane, N is the normal
+	#Also store A, B, C, and D, the coefficients of the implicit plane equation
+	def __init__(self, P0 = Point3D(0, 0, 0), N = Vector3D(0, 0, 1)):
+		self.P0 = P0
+		self.N = N
+		self.N.normalize()
+		self.resetEquation()
+
+	def resetEquation(self):
+		[self.A, self.B, self.C] = [self.N.x, self.N.y, self.N.z]
+		self.D = -self.P0.getVector().Dot(self.N)
+
+	def initFromEquation(self, A, B, C, D):
+		self.N = Vector3D(A, B, C)
+		self.P0 = Point3D(A, B, D)
+		self.P0 = (-D/self.N.MagSquared())*self.P0
+		self.N.normalize()
+		self.resetEquation()
+
+	def distFromPlane(self, P):
+		return self.A*P.x + self.B*P.y + self.C*P.z + self.D
+
+	def __str__(self):
+		return "Plane3D: %g*x + %g*y + %g*z + %g = 0"%(self.A, self.B, self.C, self.D)
+
 if __name__ == '__main__':
+	P = Plane3D(Point3D(1, 1, 1), Vector3D(1, 2, 3))
+	print P
 	angle = 30
 	angle = angle*3.141/180.0
 	(cosA, sinA) = [math.cos(angle), math.sin(angle)]

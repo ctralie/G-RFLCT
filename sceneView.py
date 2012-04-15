@@ -26,7 +26,8 @@ class Viewer(object):
 		self.scene.Read(filename)
 		self.camera = MouseSphericalCamera(self.GLUTwindow_width, self.GLUTwindow_height)
 		random.seed()
-		
+		self.rayPoints = []
+		self.eyePoints = []
 		self.initGL()
 
 	def GLUTResize(self, w, h):
@@ -54,6 +55,23 @@ class Viewer(object):
 		glEnable(GL_LIGHTING)
 
 		self.scene.renderGL()
+		if len(self.rayPoints) > 0:
+			glDisable(GL_LIGHTING)
+			glColor3f(1, 0, 0)
+			glBegin(GL_LINES)
+			[P0, P1] = [self.rayPoints[0], self.rayPoints[1]]
+			glVertex3f(P0.x, P0.y, P0.z)
+			glVertex3f(P1.x, P1.y, P1.z)
+			glEnd()
+		
+		
+		#self.eyePoints.append(self.camera.eye)
+		#glDisable(GL_LIGHTING)
+		#glPointSize(5)
+		#glBegin(GL_POINTS)
+		#for P in self.eyePoints:
+		#	glVertex3f(P.x, P.y, P.z)
+		#glEnd()
 		
 		glutSwapBuffers()
 	
@@ -76,8 +94,11 @@ class Viewer(object):
 		elif key in ['v', 'V']:
 			self.drawVerts = 1 - self.drawVerts
 		elif key in ['r', 'R']:
-			self.mesh.splitFaces()
-			print self.mesh
+			#Launch some rays for debugging
+			ray = Ray3D(self.camera.eye, -self.camera.towards)
+			intersection = self.scene.getRayIntersection(ray)
+			if intersection != None:
+				self.rayPoints = [self.camera.eye, intersection[1]]
 		glutPostRedisplay()
 	
 	def GLUTSpecial(self, key, x, y):
@@ -144,6 +165,6 @@ class Viewer(object):
 
 if __name__ == '__main__':
 	if len(argv) < 2:
-		print "Usage: meshView <mesh filepath>"
+		print "Usage: sceneView <scene filepath>"
 	else:
 		viewer = Viewer(argv[1])
