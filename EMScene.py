@@ -183,7 +183,7 @@ class EMScene(object):
 				#so need to do transpose
 				glPushMatrix()
 				glMultMatrixd(transform.Transpose().m)
-				child.mesh.renderGL()
+				child.mesh.renderGL(drawEdges = 1)
 				glPopMatrix()
 	
 	def renderGL(self):
@@ -193,16 +193,22 @@ class EMScene(object):
 	def getRayIntersection(self, ray):
 		t = float("inf")
 		Point = None
+		Normal = None
 		for m in self.meshes:
 			thisRay = ray.Copy()
 			thisRay.Transform(m.transform.Inverse())
 			intersection = m.getRayIntersection(thisRay)
 			if intersection != None:
-				if intersection[0] < t:
-					t = intersection[0]
-					Point = intersection[1]
+				thisPoint = m.transform*intersection[1]
+				thisNormal = m.transform.getUpperLeft3x3()*intersection[2]
+				dVec = thisPoint - ray.P0
+				this_t = dVec.Length()
+				if this_t < t:
+					t = this_t
+					Point = thisPoint
+					Normal = thisNormal
 		if isinstance(Point, Point3D):
-			return (t, Point)
+			return (t, Point, Normal)
 		return None
 			
 if __name__ == '__main__':

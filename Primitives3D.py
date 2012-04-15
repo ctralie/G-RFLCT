@@ -210,6 +210,13 @@ class Matrix4(object):
 		det = 1.0/det
 		return Matrix4([inv[i]*det for i in range(0, 16)])
 
+	def getUpperLeft3x3(self):
+		m = self.m[:]
+		m[3] = 0
+		m[7] = 0
+		m[11] = 0
+		return Matrix4(m)
+
 	def __str__(self):
 		fmt = "[%g, %g, %g, %g]\n"*4
 		return fmt%(tuple(self.m))

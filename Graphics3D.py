@@ -21,12 +21,7 @@ class Ray3D(object):
 	
 	def Transform(self, matrix):
 		self.P0 = matrix*self.P0
-		m = matrix.m[:]
-		m[3] = 0
-		m[7] = 0
-		m[11] = 0
-		matrixNoTrans = Matrix4(m)
-		self.V = matrixNoTrans * self.V
+		self.V = matrix.getUpperLeft3x3() * self.V
 		self.V.normalize()
 
 
@@ -42,6 +37,7 @@ class Ray3D(object):
 		if t < 0:
 			return None
 		intersectP = P + t*V
+		intersectN = N
 		#Now check to see if the intersection is within the polygon
 		#Do this by verifying that intersectP is on the same side
 		#of each segment of the polygon
@@ -56,4 +52,4 @@ class Ray3D(object):
 			if cross.Dot(lastCross) < 0: #The point must be on the outside
 				return None
 			lastCross = cross
-		return [t, intersectP]
+		return [t, intersectP, intersectN]

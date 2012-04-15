@@ -27,6 +27,7 @@ class Viewer(object):
 		self.camera = MouseSphericalCamera(self.GLUTwindow_width, self.GLUTwindow_height)
 		random.seed()
 		self.rayPoints = []
+		self.rayNormals = []
 		self.eyePoints = []
 		self.initGL()
 
@@ -63,7 +64,14 @@ class Viewer(object):
 			glVertex3f(P0.x, P0.y, P0.z)
 			glVertex3f(P1.x, P1.y, P1.z)
 			glEnd()
-		
+		if len(self.rayNormals) > 0:
+			glDisable(GL_LIGHTING)
+			glColor3f(0, 0, 1)
+			glBegin(GL_LINES)
+			[P0, P1] = [self.rayNormals[0], self.rayNormals[1]]
+			glVertex3f(P0.x, P0.y, P0.z)
+			glVertex3f(P1.x, P1.y, P1.z)
+			glEnd()		
 		
 		#self.eyePoints.append(self.camera.eye)
 		#glDisable(GL_LIGHTING)
@@ -97,8 +105,10 @@ class Viewer(object):
 			#Launch some rays for debugging
 			ray = Ray3D(self.camera.eye, -self.camera.towards)
 			intersection = self.scene.getRayIntersection(ray)
+			print intersection[2]
 			if intersection != None:
 				self.rayPoints = [self.camera.eye, intersection[1]]
+				self.rayNormals = [intersection[1], intersection[1]+0.1*intersection[2]]
 		glutPostRedisplay()
 	
 	def GLUTSpecial(self, key, x, y):

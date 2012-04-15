@@ -635,14 +635,16 @@ class PolyMesh(object):
 	def getRayIntersection(self, ray):
 		t = float("inf")
 		Point = None
+		Normal = None
 		for f in self.faces:
 			intersection = ray.intersectMeshFace(f)
 			if intersection != None:
 				if intersection[0] < t:
 					t = intersection[0]
 					Point = intersection[1]
+					Normal = intersection[2]
 		if isinstance(Point, Point3D):
-			return (t, Point)
+			return (t, Point, Normal)
 		return None
 	
 	#Transformations are simple because geometry information is only
