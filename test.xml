@@ -17,12 +17,10 @@
 			kt = "0 0 0 "
 			emission = "0 0 0 "/>
 	</OpticalMaterials>
-	<box length = "1" width = "1" height = "1">
-		1 2 0 1
-		1 0 0 0
-		0 0 1 0
-		0 0 0 1
-	</box>
+	<Source pos = "-1 0 0"/>
+	<Receiver pos = "1 0 0"/>
+	<box length = "5" width = "5" height = "5"/>
+	<box length = "0.5" width = "0.5" height = "1"/>
 	<!--<node>
 		1 0 0 0
 		0 1 0 0

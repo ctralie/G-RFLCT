@@ -83,12 +83,8 @@ class MeshFace(object):
 		return ret
 	
 	def getNormal(self):
-		verts = self.getVertices()
-		v1 = verts[1].pos - verts[0].pos
-		v2 = verts[2].pos - verts[0].pos
-		ret = v1 % v2
-		ret.normalize()
-		return ret
+		verts = [v.pos for v in self.getVertices()]
+		return getFaceNormal(verts)
 	
 	def getArea(self):
 		verts = self.getVertices()
@@ -644,7 +640,7 @@ class PolyMesh(object):
 					Point = intersection[1]
 					Face = f
 		if isinstance(Point, Point3D):
-			return (t, Point, Face)
+			return [t, Point, Face]
 		return None
 	
 	#Transformations are simple because geometry information is only

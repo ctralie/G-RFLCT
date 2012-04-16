@@ -32,6 +32,9 @@ class EMScene(object):
 	def __init__(self):
 		self.rootEMNode = EMNode()
 		self.meshes = [] #Keep a list of meshes in the scene
+		self.Source = None
+		self.Receiver = None
+		self.vSources = []
 
 	def Read(self, filename):
 		parentNode = self.rootEMNode
@@ -108,7 +111,7 @@ class EMScene(object):
 				mesh.addFace([V0, V1, V2])
 				sceneNode = EMNode(EMParentNode, mesh, matrix, EMMat, OpticalMat)
 				EMParentNode.children.append(sceneNode)
-			if currNode.tag == "box":
+			elif currNode.tag == "box":
 				args = ["length", "width", "height"]
 				for arg in args:
 					if currNode.get(arg) == None:
@@ -120,7 +123,7 @@ class EMScene(object):
 				mesh = getBoxMesh(L, W, H)
 				sceneNode = EMNode(EMParentNode, mesh, matrix, EMMat, OpticalMat)
 				EMParentNode.children.append(sceneNode)			
-			if currNode.tag == "mesh":
+			elif currNode.tag == "mesh":
 				args = ["filename"]
 				for arg in args:
 					if currNode.get(arg) == None:
@@ -131,13 +134,13 @@ class EMScene(object):
 				mesh.loadFile(meshfilename)
 				sceneNode = EMNode(EMParentNode, mesh, matrix, EMMat, OpticalMat)
 				EMParentNode.children.append(sceneNode)
-			if currNode.tag == "node":
+			elif currNode.tag == "node":
 				#This is a transformation node in the graph
 				sceneNode = EMNode(parent = EMParentNode, transformation = matrix)
 				EMParentNode.children.append(sceneNode)
 				#Now recursively add the branch in this node
 				self.ReadRecurse('', EMMaterials, OpticalMaterials, sceneNode, currNode)
-			if currNode.tag == "include":
+			elif currNode.tag == "include":
 				#Recursively include another scene file as a branch in this tree
 				if currNode.get("filename") == None:
 					print "Error: No filename defined for included scene"
@@ -146,6 +149,21 @@ class EMScene(object):
 				sceneNode = EMNode(parent = EMParentNode)
 				EMParentNode.children.append(sceneNode)
 				self.ReadRecurse(nextfilename, {}, {}, matrix, sceneNode, None)
+			elif currNode.tag == "Source":
+				if currNode.get("pos") == None:
+					print "Error: No position defined for EM Source"
+					return
+				coords = [float(i) for i in currNode.get("pos").split()]
+				self.Source = Point3D(coords[0], coords[1], coords[2])
+			elif currNode.tag == "Receiver":
+				if currNode.get("pos") == None:
+					print "Error: No position defined for EM Receiver"
+					return
+				coords = [float(i) for i in currNode.get("pos").split()]
+				self.Receiver = Point3D(coords[0], coords[1], coords[2])
+			else:
+				if not (currNode.tag in ["EMMaterials", "OpticalMaterials"]):
+					print "Unrecognized tag %s"%currNode.tag
 
 	def getMeshListRecurse(self, currEMNode, meshes, matrix):
 		for child in currEMNode.children:
@@ -155,6 +173,7 @@ class EMScene(object):
 			if child.mesh != None:
 				meshes.append(child.mesh)
 				child.mesh.transform = transform
+				child.mesh.EMNode = child #Store this so I can lookup the material later
 
 	def getMeshList(self):
 		self.meshes = []
@@ -210,12 +229,43 @@ class EMScene(object):
 					face = thisFace
 					transform = m.transform
 		if isinstance(Point, Point3D):
-			verts = face.getVertices()
-			[P0, P1, P2] = [transform*verts[i].pos for i in range(0, 3)]
-			Normal = (P2-P0)%(P1-P0)
-			Normal.normalize()
-			return (t, Point, Normal)
+			#Get the transformed face normal
+			verts = [transform*v.pos for v in face.getVertices()]
+			normal = getFaceNormal(verts)
+			#Make sure the normal is pointing in the right direction
+			if normal.Dot(ray.V) > 0:
+				normal = (-1)*normal;
+			return (t, Point, normal)
 		return None
+
+	def buildVirtualSourceTreeRecurse(self, currNode, level, maxLevel):
+		#Try to mirror this source around every face in the scene
+		for m in self.meshes:
+			EMNode = m.EMNode
+			for f in m.faces:
+				print f
+				#TODO: Finish this
+
+	def buildVirtualSourceTree(self, maxLevel):
+		if not isinstance(self.Source, Point3D):
+			print "Error: Trying to initialize virtual sources but no initial source specified"
+			return
+		self.vSources = []
+		rootSource = EMVSourceNode(self.Source, None, None, Matrix4(), None)
+		self.buildVirtualSourceTreeRecurse(rootSource, 0, maxLevel)
+
+#Used to build virtual source trees
+class EMVSourceNode(object):
+	#pos is the position of the virtual source in world coordinates
+	#meshFace is the face around which this source was reflected
+	#transform is the affine transform to get the face into world coordinates
+	def __init__(self, pos, parent, meshFace, transform, EMNode):
+		self.pos
+		self.parent = parent
+		self.meshFace = meshFace
+		self.transform = transform
+		self.EMNode = EMNode
+		self.children = []
 			
 if __name__ == '__main__':
 	scene = EMScene()

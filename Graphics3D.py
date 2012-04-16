@@ -11,45 +11,42 @@ class OpticalMaterial(object):
 		[self.ka, self.kd, self.ks] = [ka, kd, ks]
 		[self.kt, self.emission] = [kt, emission]
 
-class Ray3D(object):
-	def __init__(self, P0, V):
-		self.P0 = P0
-		self.V = V
+#fP0 is the apex of the frustum
+#frustPoints are the points that define the frustum face 
+#(assumed to be convex and specified in order)
+#facePoints are the points that define the face that's being checked
+#for being inside the frustum (assumed to be convex and specified in order)
+def meshFaceInFrustum(fP0, frustPoints, facePoints):
+	if len(frustPoints) < 3:
+		print "Error: Less than three points in face defining frustum"
+		return False
+	if len(facePoints) < 3:
+		print "Error: Less than three points in face that's being checked against frustum"
+		return False
+	#Calculate the frustum normal (pointing away from fP0)
+	frustNormal = getFaceNormal(frustPoints)
+	if frustNormal.Dot(frustPoints[0] - fP0) < 0:
+		frustNormal = (-1)*frustNormal
+	#Calculate the face normal (pointing away from P0)
+	faceNormal = getFaceNormal(facePoints)
+	if faceNormal.Dot(frustPoints[0] - fP0) < 0:
+		faceNormal = (-1)*faceNormal
+	facePlane = Plane3D(facePoints[0], faceNormal)
+	#Now check that at least part of the face is in front of the frustum face
+	allBehind = True
+	for P in facePoints:
+		if frustNormal.Dot(P - frustPoints[0]) > 0:
+			allBehind = False
+			break
+	if allBehind:
+		return False
+	#Now find the polygon frustum cross section that is
+	#in the plane of the face by intersecting a ray through each
+	#point on the frustum face with the face plane
+	planePoints = []
+	for P in frustPoints:
+		ray = Ray3D(fP0, P-fP0)
+		intersection = ray.intersectPlane(facePlane)
+		if intersection != None:
+			planePoints.append(intersection[1])
 	
-	def Copy(self):
-		return Ray3D(self.P0.Copy(), self.V.Copy())
-	
-	def Transform(self, matrix):
-		self.P0 = matrix*self.P0
-		self.V = matrix.getUpperLeft3x3()*self.V
-		self.V.normalize()
-
-
-	def intersectMeshFace(self, face):
-		facePlane = face.getPlane()
-		P0 = facePlane.P0
-		N = facePlane.N
-		P = self.P0
-		V = self.V
-		if abs(N.Dot(V)) < EPS:
-			return None
-		t = (P0.getVector().Dot(N) - N.Dot(P.getVector())) / (N.Dot(V))
-		if t < 0:
-			return None
-		intersectP = P + t*V
-		intersectN = N
-		#Now check to see if the intersection is within the polygon
-		#Do this by verifying that intersectP is on the same side
-		#of each segment of the polygon
-		verts = [v.pos for v in face.getVertices()]
-		if len(verts) < 3:
-			return None
-		lastCross = (verts[1] - verts[0]) % (intersectP - verts[1])
-		for i in range(1, len(verts)):
-			v0 = verts[i]
-			v1 = verts[(i+1)%len(verts)]
-			cross = (v1 - v0) % (intersectP - v1)
-			if cross.Dot(lastCross) < 0: #The point must be on the outside
-				return None
-			lastCross = cross
-		return [t, intersectP, intersectN]

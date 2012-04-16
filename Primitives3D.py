@@ -2,6 +2,10 @@ EPS = 1e-7
 M_PI = 3.1415925
 import math
 
+#############################################################
+####                 PRIMITIVE CLASSES                  #####
+#############################################################
+
 class Vector3D(object):
 	def __init__(self, x, y, z):
 		self.x = x
@@ -224,6 +228,126 @@ class Matrix4(object):
 		fmt = "[%g, %g, %g, %g]\n"*4
 		return fmt%(tuple(self.m))
 
+class Plane3D(object):
+	#P0 is some point on the plane, N is the normal
+	#Also store A, B, C, and D, the coefficients of the implicit plane equation
+	def __init__(self, P0, N):
+		self.P0 = P0
+		self.N = N
+		self.N.normalize()
+		self.resetEquation()
+
+	def resetEquation(self):
+		[self.A, self.B, self.C] = [self.N.x, self.N.y, self.N.z]
+		self.D = -self.P0.getVector().Dot(self.N)
+
+	def initFromEquation(self, A, B, C, D):
+		self.N = Vector3D(A, B, C)
+		self.P0 = Point3D(A, B, D)
+		self.P0 = (-D/self.N.MagSquared())*self.P0
+		self.N.normalize()
+		self.resetEquation()
+
+	def distFromPlane(self, P):
+		return self.A*P.x + self.B*P.y + self.C*P.z + self.D
+
+	def __str__(self):
+		return "Plane3D: %g*x + %g*y + %g*z + %g = 0"%(self.A, self.B, self.C, self.D)
+
+class Line3D(object):
+	def __init__(self, P0, V):
+		self.P0 = P0
+		self.V = V.Copy()
+		self.V.Normalize()
+
+	def intersectPlane(self, plane):
+		P0 = plane.P0
+		N = plane.N
+		P = self.P0
+		V = self.V
+		if abs(N.Dot(V)) < EPS:
+			return None
+		t = (P0.getVector().Dot(N) - N.Dot(P.getVector())) / (N.Dot(V))
+		intersectP = P + t*V
+		return [t, intersectP]
+	
+	def intersectLine(self, other):
+		
+PLPoint* intersectSegments(PLPoint& A, PLPoint& B, PLPoint& C, PLPoint& D, bool countEndpoints) {
+	double denomDet = (D.x-C.x)*(A.y-B.y) - (D.y-C.y)*(A.x-B.x);
+	if (denomDet == 0) { //Segments are parallel
+		return NULL;
+	}
+	double num_t = (A.x-C.x)*(A.y-B.y) - (A.y-C.y)*(A.x-B.x);
+	double num_s = (D.x-C.x)*(A.y-C.y) - (D.y-C.y)*(A.x-C.x);
+	double t = num_t / denomDet;
+	double s = num_s / denomDet;
+	if (s < 0 || s > 1)
+		return NULL;//Intersection not within the bounds of segment 1
+	if (t < 0 || t > 1)
+		return NULL;//Intersection not within the bounds of segment 2
+
+	//Don't count intersections that occur at the endpoints of both segments
+	//if the user so chooses
+	if ((t == 0 || t == 1) && (s == 0 || s == 1) && !countEndpoints)
+		return NULL;
+
+	PLPoint* ret = new PLPoint(A.x, A.y);
+	ret->x += (B.x-A.x)*s;
+	ret->y += (B.y-A.y)*s;
+	return ret;
+}
+
+class Ray3D(object):
+	def __init__(self, P0, V):
+		self.P0 = P0
+		self.V = V.Copy()
+		self.V.Normalize()
+		self.line = Line3D(self.P0, self.V)
+	
+	def Copy(self):
+		return Ray3D(self.P0.Copy(), self.V.Copy())
+	
+	def Transform(self, matrix):
+		self.P0 = matrix*self.P0
+		self.V = matrix.getUpperLeft3x3()*self.V
+		self.V.normalize()
+	
+	def intersectPlane(self, plane):
+		intersection = self.line.intersectPlane(plane)
+		if intersection != None:
+			if intersection[0] < 0:
+				return None
+			return intersection
+	
+	def intersectMeshFace(self, face):
+		facePlane = face.getPlane()
+		intersection = self.intersectPlane(facePlane)
+		if intersection == None:
+			return None
+		[t, intersectP] = intersection
+		#Now check to see if the intersection is within the polygon
+		#Do this by verifying that intersectP is on the same side
+		#of each segment of the polygon
+		verts = [v.pos for v in face.getVertices()]
+		if len(verts) < 3:
+			return None
+		lastCross = (verts[1] - verts[0]) % (intersectP - verts[1])
+		for i in range(1, len(verts)):
+			v0 = verts[i]
+			v1 = verts[(i+1)%len(verts)]
+			cross = (v1 - v0) % (intersectP - v1)
+			if cross.Dot(lastCross) < 0: #The point must be on the outside
+				return None
+			lastCross = cross
+		return [t, intersectP]
+	
+
+
+#############################################################
+####                UTILITY FUNCTIONS                   #####
+#############################################################
+
 #Rotate a vector (or point) V by angle "theta" around a line through P0 
 #whose direction is specified by V
 def rotateAroundAxis(P0, axis, theta, V):
@@ -291,31 +415,19 @@ def are2DConvex(verts):
 		lastCross = cross
 	return True
 
-class Plane3D(object):
-	#P0 is some point on the plane, N is the normal
-	#Also store A, B, C, and D, the coefficients of the implicit plane equation
-	def __init__(self, P0 = Point3D(0, 0, 0), N = Vector3D(0, 0, 1)):
-		self.P0 = P0
-		self.N = N
-		self.N.normalize()
-		self.resetEquation()
-
-	def resetEquation(self):
-		[self.A, self.B, self.C] = [self.N.x, self.N.y, self.N.z]
-		self.D = -self.P0.getVector().Dot(self.N)
-
-	def initFromEquation(self, A, B, C, D):
-		self.N = Vector3D(A, B, C)
-		self.P0 = Point3D(A, B, D)
-		self.P0 = (-D/self.N.MagSquared())*self.P0
-		self.N.normalize()
-		self.resetEquation()
-
-	def distFromPlane(self, P):
-		return self.A*P.x + self.B*P.y + self.C*P.z + self.D
-
-	def __str__(self):
-		return "Plane3D: %g*x + %g*y + %g*z + %g = 0"%(self.A, self.B, self.C, self.D)
+#General purpose method for returning the normal of a face
+#Assumes "verts" are planar and not all collinear
+def getFaceNormal(verts):
+	#This properly handles the case where three vertices
+	#are collinear right after one another
+	for i in range(2, len(verts)):
+		v1 = verts[i-1] - verts[i-2]
+		v2 = verts[i] - verts[i-2]
+		ret = v1 % v2
+		if ret.squaredMag() > EPS:
+			ret.normalize()
+			return ret
+	return None
 
 if __name__ == '__main__':
 	P = Plane3D(Point3D(1, 1, 1), Vector3D(1, 2, 3))

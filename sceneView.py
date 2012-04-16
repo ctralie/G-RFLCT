@@ -80,6 +80,26 @@ class Viewer(object):
 		#	glVertex3f(P.x, P.y, P.z)
 		#glEnd()
 		
+		if isinstance(self.scene.Source, Point3D):
+			glDisable(GL_LIGHTING)
+			glColor3f(1, 0, 0)
+			P = self.scene.Source
+			quadric = gluNewQuadric()
+			glPushMatrix()
+			glTranslatef(P.x, P.y, P.z)
+			gluSphere(quadric, 0.1, 32, 32)
+			glPopMatrix()
+		
+		if isinstance(self.scene.Receiver, Point3D):
+			glDisable(GL_LIGHTING)
+			glColor3f(0, 0, 1)
+			P = self.scene.Receiver
+			quadric = gluNewQuadric()
+			glPushMatrix()
+			glTranslatef(P.x, P.y, P.z)
+			gluSphere(quadric, 0.1, 32, 32)
+			glPopMatrix()
+		
 		glutSwapBuffers()
 	
 	def handleMouseStuff(self, x, y):
