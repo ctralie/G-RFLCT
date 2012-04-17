@@ -42,7 +42,7 @@ class EMScene(object):
 		parentNode = self.rootEMNode
 		self.ReadRecurse(filename, {}, {}, parentNode, None)
 		self.getMeshList()
-		self.buildVirtualSourceTree(1)
+		self.buildVirtualSourceTree(2)
 		self.getPathsToReceiver()
 
 	def ReadRecurse(self, filename = '', EMMaterials = {}, OpticalMaterials = {},  EMParentNode = None, XMLNode = None):
@@ -155,9 +155,9 @@ class EMScene(object):
 					print "Error: No filename defined for included scene"
 					return
 				nextfilename = currNode.get("filename")
-				sceneNode = EMNode(parent = EMParentNode)
+				sceneNode = EMNode(parent = EMParentNode, transformation = matrix)
 				EMParentNode.children.append(sceneNode)
-				self.ReadRecurse(nextfilename, {}, {}, matrix, sceneNode, None)
+				self.ReadRecurse(nextfilename, {}, {}, sceneNode, None)
 			elif currNode.tag == "Source":
 				if currNode.get("pos") == None:
 					print "Error: No position defined for EM Source"
@@ -288,6 +288,7 @@ class EMScene(object):
 		self.vSources = []
 		rootSource = EMVSourceNode(self.Source, None, None, None)
 		self.buildVirtualSourceTreeRecurse(rootSource, 0, maxLevel)
+		print "There are %i virtual sources"%len(self.vSources)
 	
 	#This assumes the source tree has been built
 	def getPathsToReceiver(self):
@@ -323,6 +324,7 @@ class EMScene(object):
 				currSource = currSource.parent
 			if validPath:
 				self.paths.append(path)
+		print "There were %i paths found"%len(self.paths)
 
 #Used to build virtual source trees
 class EMVSourceNode(object):

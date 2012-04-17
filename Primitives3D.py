@@ -435,10 +435,10 @@ def getFaceNormal(verts):
 	#This properly handles the case where three vertices
 	#are collinear right after one another
 	for i in range(2, len(verts)):
-		v1 = verts[i-1] - verts[i-2]
-		v2 = verts[i] - verts[i-2]
+		v1 = verts[i-1] - verts[0]
+		v2 = verts[i] - verts[0]
 		ret = v1 % v2
-		if ret.squaredMag() > EPS:
+		if ret.Length()/(v1.Length()*v2.Length()) > EPS:
 			ret.normalize()
 			return ret
 	return None

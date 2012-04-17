@@ -1,0 +1,22 @@
+<!--A table that sits on the XZ plane, with the long direction in X!-->
+<EMScene>
+	<EMMaterials>
+		<material name = "reflective" R = "1.0" T = "0.0"/>
+		<material name = "absorptive" R = "0.0" T = "0.0"/>
+	</EMMaterials>
+	<OpticalMaterials>
+		<material name = "woodbrown" 
+			ka = "0.79 0.43 0.14"
+			kd = "0.79 0.43 0.14"
+			ks = "0.5 0.5 0.5"
+			kt = "0 0 0 "
+			emission = "0 0 0 "/>
+	</OpticalMaterials>
+	<!--Top of table!-->
+	<box width = "1.5" height = "0.04" length = "0.8" center = "0.75 1 0.4" om = "woodbrown"/>
+	<!--Legs of table!--> 
+	<box width = "0.1" length = "0.1" height = "0.98" center = "0.05 0.49 0.05" om = "woodbrown"/>
+	<box width = "0.1" length = "0.1" height = "0.98" center = "1.45 0.49 0.05" om = "woodbrown"/>
+	<box width = "0.1" length = "0.1" height = "0.98" center = "0.05 0.49 0.75" om = "woodbrown"/>
+	<box width = "0.1" length = "0.1" height = "0.98" center = "1.45 0.49 0.75" om = "woodbrown"/>
+</EMScene>

@@ -9,7 +9,7 @@ from RayTraceImage import *
 from sys import argv
 import random
 
-SHOWIMAGES = True
+SHOWIMAGES = False
 DRAWPATHS = True
 
 class Viewer(object):
@@ -29,6 +29,7 @@ class Viewer(object):
 		self.scene = EMScene()
 		self.scene.Read(filename)
 		self.camera = MouseSphericalCamera(self.GLUTwindow_width, self.GLUTwindow_height)
+		self.camera.center = Point3D(1, 1, 1)
 		random.seed()
 		self.rayPoints = []
 		self.rayNormals = []
