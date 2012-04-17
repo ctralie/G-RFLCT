@@ -34,12 +34,15 @@ class EMScene(object):
 		self.meshes = [] #Keep a list of meshes in the scene
 		self.Source = None
 		self.Receiver = None
-		self.vSources = []
+		self.vSources = [] #Virtual sources
+		self.paths = [] #Paths discovered from source to receiver
 
 	def Read(self, filename):
 		parentNode = self.rootEMNode
 		self.ReadRecurse(filename, {}, {}, parentNode, None)
 		self.getMeshList()
+		self.buildVirtualSourceTree(1)
+		self.getPathsToReceiver()
 
 	def ReadRecurse(self, filename = '', EMMaterials = {}, OpticalMaterials = {},  EMParentNode = None, XMLNode = None):
 		if (len(filename) > 0):
@@ -235,16 +238,38 @@ class EMScene(object):
 			#Make sure the normal is pointing in the right direction
 			if normal.Dot(ray.V) > 0:
 				normal = (-1)*normal;
-			return (t, Point, normal)
+			return (t, Point, normal, face)
 		return None
 
 	def buildVirtualSourceTreeRecurse(self, currNode, level, maxLevel):
+		self.vSources.append(currNode)
+		print currNode.pos
+		if level == maxLevel:
+			return
 		#Try to mirror this source around every face in the scene
 		for m in self.meshes:
 			EMNode = m.EMNode
 			for f in m.faces:
-				print f
-				#TODO: Finish this
+				if f != currNode.meshFace:
+					fP0 = currNode.pos
+					facePoints = [m.transform*P.pos for P in f.getVertices()]
+					if level > 0: #Do pruning test to avoid making
+						#virtual sources that cannot be reached from this one
+						#meshFaceInFrustum(fP0, frustPoints, facePoints)
+						frustPoints = [currNode.transform*P.pos for P in currNode.meshFace.getVertices()]
+						if not meshFaceInFrustum(fP0, frustPoints, facePoints):
+							continue
+					#Tests passed: need to make a virtual image here
+					#First mirror the current virtual source point
+					#across the plane of the new face
+					faceNormal = getFaceNormal(facePoints)
+					dV = fP0 - facePoints[0]
+					perpFaceV = faceNormal.proj(dV)
+					parFaceV = faceNormal.projPerp(dV)
+					mirrorP0 = facePoints[0] + parFaceV - perpFaceV
+					newSourceNode = EMVSourceNode(mirrorP0, currNode, f, m.transform, m.EMNode)
+					currNode.children.append(newSourceNode)
+					self.buildVirtualSourceTreeRecurse(newSourceNode, level+1, maxLevel)
 
 	def buildVirtualSourceTree(self, maxLevel):
 		if not isinstance(self.Source, Point3D):
@@ -253,6 +278,46 @@ class EMScene(object):
 		self.vSources = []
 		rootSource = EMVSourceNode(self.Source, None, None, Matrix4(), None)
 		self.buildVirtualSourceTreeRecurse(rootSource, 0, maxLevel)
+	
+	#This assumes the source tree has been built
+	def getPathsToReceiver(self):
+		self.paths = []
+		for sourceNode in self.vSources:
+			currNode = sourceNode
+			#Store the path in reverse order
+			path = [self.Receiver]
+			validPath = True
+			while currNode != None:
+				target = path[-1]
+				ray = Ray3D(currNode.pos, target - currNode.pos)
+				#Get back from roy intersection:
+				#(t, Point, normal, face)
+				intersection = self.getRayIntersection(ray)
+				if currNode.parent != None:
+					if intersection == None:
+						#The ray doesn't go through the face
+						validPath = False
+						break
+					if intersection[3] != currNode.meshFace:
+						#Something is in the way
+						validPath = False
+						break
+				else:
+					#This is the last path
+					if intersection != None:
+						if (intersection[1] - target).squaredMag() > EPS:
+							validPath = False
+							break
+				#All intersection tests passed: this segment of the path is valid
+				if currNode.parent != None:
+					path.append(intersection[1])
+				else:
+					path.append(currNode.pos)
+				currNode = currNode.parent
+			if validPath:
+				self.paths.append(path)
+				print len(path)
+		print "There were %i paths found"%len(self.paths)
 
 #Used to build virtual source trees
 class EMVSourceNode(object):
@@ -260,7 +325,7 @@ class EMVSourceNode(object):
 	#meshFace is the face around which this source was reflected
 	#transform is the affine transform to get the face into world coordinates
 	def __init__(self, pos, parent, meshFace, transform, EMNode):
-		self.pos
+		self.pos = pos
 		self.parent = parent
 		self.meshFace = meshFace
 		self.transform = transform

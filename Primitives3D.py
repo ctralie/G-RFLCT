@@ -272,6 +272,10 @@ class Line3D(object):
 		return [t, intersectP]
 	
 	def intersectOtherLine(self, other):
+		#P0 = Point3D(-2.5, 0, -2.5)
+		#V0 = Vector3D(-0, -0, -1)
+		#P1 = Point3D(-2.5, -2.5, 0)
+		#V1 = Vector3D(0, -1, 0)
 		#Solve for (s, t) in the equation P0 + t*V0 = P1+s*V1
 		#This is three equations (x, y, z components) in 2 variables (s, t)
 		#User cramer's rule and the fact that there is a linear
@@ -283,11 +287,11 @@ class Line3D(object):
 		V0 = self.V
 		P1 = other.P0
 		V1 = other.V
-		a = V0.x
-		b = -V1.x
+		a = V0.x+V0.z
+		b = -(V1.x+V1.z)
 		c = V0.y + V0.z
 		d = -(V1.y+V1.z)
-		e = P1.x - P0.x
+		e = P1.x + P1.z - (P0.x + P0.z)
 		f = P1.y + P1.z - (P0.y + P0.z)
 		#print "[%g %g][t] = [%g]\n[%g %g][s]   [%g]"%(a, b, e, c, d, f)
 		detDenom = a*d - c*b
@@ -300,6 +304,9 @@ class Line3D(object):
 		s = detNums / detDenom
 		#print "s = %g, t = %g"%(s, t)
 		return P0 + t*V0
+	
+	def __str__(self):
+		return "Line3D: %s + t%s"%(self.P0, self.V)
 
 
 class Ray3D(object):
@@ -345,6 +352,9 @@ class Ray3D(object):
 				return None
 			lastCross = cross
 		return [t, intersectP]
+
+	def __str__(self):
+		return "Ray3D: %s + t%s"%(self.P0, self.V)
 	
 
 
@@ -434,6 +444,14 @@ def getFaceNormal(verts):
 	return None
 
 if __name__ == '__main__':
+#	P0 = Point3D(-2.5, 0, -2.5)
+#	V0 = Vector3D(-0, -0, -1)
+#	P1 = Point3D(-2.5, -2.5, 0)
+#	V1 = Vector3D(0, -1, 0)
+#	line1 = Line3D(P0, V0)
+#	line2 = Line3D(P1, V1)
+#	intersection = line1.intersectOtherLine(line2)
+	
 	P0 = Point3D(0, 0, 0)#(1, 4, 0)
 	P1 = Point3D(1, 1, 0)#(5, 2, 0)
 	P2 = Point3D(0, 1, 0)#(2, 0, 0)

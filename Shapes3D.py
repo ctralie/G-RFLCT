@@ -35,20 +35,35 @@ class Circle3D(object):
 		self.center = center
 		self.R = R
 		self.normal = normal
+	
+	#This method assumes the circles are coplanar
+	def intersectsOtherCircle(self, other):
+		dCenters = self.center - other.center
+		R1 = self.R.Length()
+		R2 = other.R.Length()
+		if dCenters.Length() < R1 + R2 + EPS:
+			return True
+		return False
 
 #Implement a *slow* N^4 version (since N will be small most of the time)
 def getMinimumEnclosingCircle(points, normal):
 	minimum = None
 	minRadiusSqr = float("inf")
 	for i in range(0, len(points)):
-		for j in range(i, len(points)):
-			for k in range(j, len(points)):
+		for j in range(i+1, len(points)):
+			for k in range(j+1, len(points)):
 				[P0, P1, P2] = [points[i], points[j], points[k]]
 				#Construct circle by intersecting perpendicular bisectors
 				#between pairs of points to find the center
 				bisector1 = Line3D(P0 + 0.5*(P1-P0), (P1-P0)%normal)
 				bisector2 = Line3D(P1 + 0.5*(P2-P1), (P2-P1)%normal)
 				center = bisector1.intersectOtherLine(bisector2)
+				#if not isinstance(center, Point3D):
+				#	print "i = %i, j = %i, k = %i"%(i, j, k)
+				#	print "P0: %s\nP1: %s\nP2: %s"%(P0, P1, P2)
+				#	print "Normal: %s\n(P1 - P0): %s\n(P2 - P1): %s"%(normal, P1 - P0, P2 - P1)
+				#	print "bisector1: %s\nbisector2: %s"%(bisector1, bisector2)
+				#	print "center: %s\n\n"%center
 				if isinstance(center, Point3D):
 					#Check to make sure all other points lie inside the circle
 					RVec = P0 - center
@@ -68,14 +83,18 @@ def getMinimumEnclosingCircle(points, normal):
 	return minimum
 
 if __name__ == '__main__':
-	points = [Point3D(-1, 0, 0), Point3D(0, 1, 0), Point3D(1, 0, 0), Point3D(0, 0, 0), Point3D(0.1, 1.5, 0)];
-	PointRot = Point3D(0, 0, 0)
-	AxisRot = Vector3D(1, 1, 1)
-	Angle = 0.5
-	points = [rotateAroundAxis(PointRot, AxisRot, Angle, P) for P in points]
-	circle = getMinimumEnclosingCircle(points, (points[1] - points[0])%(points[2] - points[1]))
+	normal = Vector3D(-1, 0, -0)
+	points = [Point3D(-2.5, 2.5, 2.5), Point3D(-2.5, 2.5, -2.5), Point3D(-2.5, -2.5, -2.5), Point3D(-2.5, -2.5, 2.5)]
+	circle = getMinimumEnclosingCircle(points, normal)
+	print circle
+	#points = [Point3D(-1, 0, 0), Point3D(0, 1, 0), Point3D(1, 0, 0), Point3D(0, 0, 0), Point3D(0.1, 1.5, 0)];
+	#PointRot = Point3D(0, 0, 0)
+	#AxisRot = Vector3D(1, 1, 1)
+	#Angle = 0.5
+	#points = [rotateAroundAxis(PointRot, AxisRot, Angle, P) for P in points]
+	#circle = getMinimumEnclosingCircle(points, (points[1] - points[0])%(points[2] - points[1]))
 	#circle.center = rotateAroundAxis(PointRot, AxisRot, -Angle, P)
-	print circle.center
-	for P in points:
-		print (P - circle.center).Length()
-	print circle.R.Length()
+	#print circle.center
+	#for P in points:
+	#	print (P - circle.center).Length()
+	#print circle.R.Length()

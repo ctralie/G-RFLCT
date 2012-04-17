@@ -43,11 +43,30 @@ def meshFaceInFrustum(fP0, frustPoints, facePoints):
 	#Find the polygon frustum cross section that is
 	#in the plane of the face by intersecting a ray through each
 	#point on the frustum face with the face plane
-	planePoints = []
+	frustSlicePoints = []
 	for P in frustPoints:
 		ray = Ray3D(fP0, P-fP0)
 		intersection = ray.intersectPlane(facePlane)
+		if intersection == None: #TODO: Need to handle this case better!
+		#(this is the case where projection of the face's plane to the frustum may be unbounded)
+			return True
 		if intersection != None:
-			planePoints.append(intersection[1])
+			frustSlicePoints.append(intersection[1])
 	#Find the minimum enclosing circle for the plane cross section
 	#and for the face
+	faceCircle = getMinimumEnclosingCircle(facePoints, faceNormal)
+	frustSliceCircle = getMinimumEnclosingCircle(frustSlicePoints, faceNormal)
+	if faceCircle == None:
+		print "Warning: No minimum enclosing circle found for face points"
+		print faceNormal
+		for P in facePoints:
+			print P
+		print "\n\n"
+		return True #Return true to be safe
+	if frustSliceCircle == None:
+		print "Warning: No minimum enclosing circle found for frustum slice"
+		for P in frustSlicePoints:
+			print P
+		print "\n\n"
+		return True
+	return faceCircle.intersectsOtherCircle(frustSliceCircle)
