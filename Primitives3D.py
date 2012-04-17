@@ -283,26 +283,22 @@ class Line3D(object):
 		V0 = self.V
 		P1 = other.P0
 		V1 = other.V
-		#double denomDet = (D.x-C.x)*(A.y-B.y) - (D.y-C.y)*(A.x-B.x);
 		a = V0.x
 		b = -V1.x
 		c = V0.y + V0.z
 		d = -(V1.y+V1.z)
 		e = P1.x - P0.x
 		f = P1.y + P1.z - (P0.y + P0.z)
-		print "[%g %g][t] = [%g]\n[%g %g][s]   [%g]"%(a, b, e, c, d, f)
+		#print "[%g %g][t] = [%g]\n[%g %g][s]   [%g]"%(a, b, e, c, d, f)
 		detDenom = a*d - c*b
 		#Lines are parallel or skew
 		if (abs(detDenom) < EPS):
 			return None
-		#double num_t = (A.x-C.x)*(A.y-B.y) - (A.y-C.y)*(A.x-B.x);
 		detNumt = e*d - b*f
 		detNums = a*f - c*e
 		t = detNumt / detDenom
 		s = detNums / detDenom
-		print "s = %g, t = %g"%(s, t)
-		print P0 + t*V0
-		print P1 + s*V1
+		#print "s = %g, t = %g"%(s, t)
 		return P0 + t*V0
 
 
@@ -442,16 +438,19 @@ if __name__ == '__main__':
 	P1 = Point3D(1, 1, 0)#(5, 2, 0)
 	P2 = Point3D(0, 1, 0)#(2, 0, 0)
 	P3 = Point3D(1, 0, 0)#(3, 5, 0)
-	P0 = rotateAroundAxis(Point3D(0, 0, 0), Vector3D(1, 1, 1), 0.5, P0)
-	P1 = rotateAroundAxis(Point3D(0, 0, 0), Vector3D(1, 1, 1), 0.5, P1)
-	P2 = rotateAroundAxis(Point3D(0, 0, 0), Vector3D(1, 1, 1), 0.5, P2)
-	P3 = rotateAroundAxis(Point3D(0, 0, 0), Vector3D(1, 1, 1), 0.5, P3)
+	PointRot = Point3D(0, 0, 0)
+	AxisRot = Vector3D(1, 1, 1)
+	Angle = 0.5
+	P0 = rotateAroundAxis(PointRot, AxisRot, Angle, P0)
+	P1 = rotateAroundAxis(PointRot, AxisRot, Angle, P1)
+	P2 = rotateAroundAxis(PointRot, AxisRot, Angle, P2)
+	P3 = rotateAroundAxis(PointRot, AxisRot, Angle, P3)
 	V0 = P1 - P0
 	V1 = P3 - P2
 	line1 = Line3D(P0, V0)
 	line2 = Line3D(P2, V1)
 	intersection = line1.intersectOtherLine(line2)
-	intersection = rotateAroundAxis(Point3D(0, 0, 0), Vector3D(1, 1, 1), -0.5, intersection)
+	intersection = rotateAroundAxis(PointRot, AxisRot, -Angle, intersection)
 	print intersection
 #	P = Plane3D(Point3D(1, 1, 1), Vector3D(1, 2, 3))
 #	print P

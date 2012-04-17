@@ -32,7 +32,7 @@ def meshFaceInFrustum(fP0, frustPoints, facePoints):
 	if faceNormal.Dot(frustPoints[0] - fP0) < 0:
 		faceNormal = (-1)*faceNormal
 	facePlane = Plane3D(facePoints[0], faceNormal)
-	#Now check that at least part of the face is in front of the frustum face
+	#Check that at least part of the face is in front of the frustum face
 	allBehind = True
 	for P in facePoints:
 		if frustNormal.Dot(P - frustPoints[0]) > 0:
@@ -40,7 +40,7 @@ def meshFaceInFrustum(fP0, frustPoints, facePoints):
 			break
 	if allBehind:
 		return False
-	#Now find the polygon frustum cross section that is
+	#Find the polygon frustum cross section that is
 	#in the plane of the face by intersecting a ray through each
 	#point on the frustum face with the face plane
 	planePoints = []
@@ -49,4 +49,5 @@ def meshFaceInFrustum(fP0, frustPoints, facePoints):
 		intersection = ray.intersectPlane(facePlane)
 		if intersection != None:
 			planePoints.append(intersection[1])
-	
+	#Find the minimum enclosing circle for the plane cross section
+	#and for the face
