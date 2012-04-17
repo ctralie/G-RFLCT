@@ -656,15 +656,15 @@ class PolyMesh(object):
 		topology = nV-nE+nF
 		return "PolyMesh Object: NVertices = %i, NEdges = %i, NFaces = %i, topology=%i"%(nV, nE, nF, topology)	
 
-def getBoxMesh(L = 1, W = 1, H = 1):
-	P1 = Point3D(-W/2, -H/2, L/2)
-	P2 = Point3D(W/2, -H/2, L/2)
-	P3 = Point3D(W/2, H/2, L/2)
-	P4 = Point3D(-W/2, H/2, L/2)
-	P5 = Point3D(-W/2, -H/2, -L/2)
-	P6 = Point3D(W/2, -H/2, -L/2)
-	P7 = Point3D(W/2, H/2, -L/2)
-	P8 = Point3D(-W/2, H/2, -L/2)
+def getBoxMesh(L = 1, W = 1, H = 1, C = Point3D(0, 0, 0)):
+	P1 = Point3D(C.x-W/2, C.y-H/2, C.z+L/2)
+	P2 = Point3D(C.x+W/2, C.y-H/2, C.z+L/2)
+	P3 = Point3D(C.x+W/2, C.y+H/2, C.z+L/2)
+	P4 = Point3D(C.x-W/2, C.y+H/2, C.z+L/2)
+	P5 = Point3D(C.x-W/2, C.y-H/2, C.z-L/2)
+	P6 = Point3D(C.x+W/2, C.y-H/2, C.z-L/2)
+	P7 = Point3D(C.x+W/2, C.y+H/2, C.z-L/2)
+	P8 = Point3D(C.x-W/2, C.y+H/2, C.z-L/2)
 	mesh = PolyMesh()
 	[V1, V2] = [mesh.addVertex(P1), mesh.addVertex(P2)]
 	[V3, V4] = [mesh.addVertex(P3), mesh.addVertex(P4)]

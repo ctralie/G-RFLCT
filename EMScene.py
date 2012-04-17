@@ -36,6 +36,7 @@ class EMScene(object):
 		self.Receiver = None
 		self.vSources = [] #Virtual sources
 		self.paths = [] #Paths discovered from source to receiver
+		self.rays = [] #For debugging
 
 	def Read(self, filename):
 		parentNode = self.rootEMNode
@@ -123,7 +124,12 @@ class EMScene(object):
 				L = float(currNode.get("length")) #Length in z
 				W = float(currNode.get("width")) #Width in x
 				H = float(currNode.get("height")) #Height in y
-				mesh = getBoxMesh(L, W, H)
+				C = Point3D(0, 0, 0)
+				#Center is an optional argument
+				if currNode.get("center") != None:
+					CPoints = [float(i) for i in currNode.get("center").split()] #Center of box
+					C = Point3D(CPoints[0], CPoints[1], CPoints[2])
+				mesh = getBoxMesh(L, W, H, C)
 				sceneNode = EMNode(EMParentNode, mesh, matrix, EMMat, OpticalMat)
 				EMParentNode.children.append(sceneNode)			
 			elif currNode.tag == "mesh":
@@ -168,6 +174,9 @@ class EMScene(object):
 				if not (currNode.tag in ["EMMaterials", "OpticalMaterials"]):
 					print "Unrecognized tag %s"%currNode.tag
 
+	#Get a list of meshes in the scene
+	#Transform all of the meshes into world coordinates but keep
+	#track of the matrix that was used to do that
 	def getMeshListRecurse(self, currEMNode, meshes, matrix):
 		for child in currEMNode.children:
 			transform = matrix*child.transformation
@@ -176,6 +185,7 @@ class EMScene(object):
 			if child.mesh != None:
 				meshes.append(child.mesh)
 				child.mesh.transform = transform
+				child.mesh.Transform(transform)#Put mesh into world coordinates
 				child.mesh.EMNode = child #Store this so I can lookup the material later
 
 	def getMeshList(self):
@@ -203,26 +213,28 @@ class EMScene(object):
 				#Now draw
 				#NOTE: I'm row major and GL is column major
 				#so need to do transpose
-				glPushMatrix()
-				glMultMatrixd(transform.Transpose().m)
+				#NOTE: No longer need to do this step because the 
+				#meshes have been pre-transformed
+				#glPushMatrix()
+				#glMultMatrixd(transform.Transpose().m)
 				child.mesh.renderGL(drawEdges = 1)
-				glPopMatrix()
+				#glPopMatrix()
 	
 	def renderGL(self):
 		self.renderGLRecurse(self.rootEMNode, self.rootEMNode.transformation)
 	
 	#TODO: Add better recursive intersect method with bounding box tests
+	#NOTE: All meshes are in world coordinates now so no longer need to
+	#transform the ray
 	def getRayIntersection(self, ray):
 		t = float("inf")
 		Point = None
 		face = None
-		transform = None
 		for m in self.meshes:
 			thisRay = ray.Copy()
-			thisRay.Transform(m.transform.Inverse())
 			intersection = m.getRayIntersection(thisRay)
 			if intersection != None:
-				thisPoint = m.transform*intersection[1]
+				thisPoint = intersection[1]
 				thisFace = intersection[2]
 				dVec = thisPoint - ray.P0
 				this_t = dVec.Length()
@@ -230,10 +242,9 @@ class EMScene(object):
 					t = this_t
 					Point = thisPoint
 					face = thisFace
-					transform = m.transform
 		if isinstance(Point, Point3D):
 			#Get the transformed face normal
-			verts = [transform*v.pos for v in face.getVertices()]
+			verts = [v.pos for v in face.getVertices()]
 			normal = getFaceNormal(verts)
 			#Make sure the normal is pointing in the right direction
 			if normal.Dot(ray.V) > 0:
@@ -243,7 +254,6 @@ class EMScene(object):
 
 	def buildVirtualSourceTreeRecurse(self, currNode, level, maxLevel):
 		self.vSources.append(currNode)
-		print currNode.pos
 		if level == maxLevel:
 			return
 		#Try to mirror this source around every face in the scene
@@ -252,11 +262,11 @@ class EMScene(object):
 			for f in m.faces:
 				if f != currNode.meshFace:
 					fP0 = currNode.pos
-					facePoints = [m.transform*P.pos for P in f.getVertices()]
+					facePoints = [P.pos for P in f.getVertices()]
 					if level > 0: #Do pruning test to avoid making
 						#virtual sources that cannot be reached from this one
 						#meshFaceInFrustum(fP0, frustPoints, facePoints)
-						frustPoints = [currNode.transform*P.pos for P in currNode.meshFace.getVertices()]
+						frustPoints = [P.pos for P in currNode.meshFace.getVertices()]
 						if not meshFaceInFrustum(fP0, frustPoints, facePoints):
 							continue
 					#Tests passed: need to make a virtual image here
@@ -267,7 +277,7 @@ class EMScene(object):
 					perpFaceV = faceNormal.proj(dV)
 					parFaceV = faceNormal.projPerp(dV)
 					mirrorP0 = facePoints[0] + parFaceV - perpFaceV
-					newSourceNode = EMVSourceNode(mirrorP0, currNode, f, m.transform, m.EMNode)
+					newSourceNode = EMVSourceNode(mirrorP0, currNode, f, m.EMNode)
 					currNode.children.append(newSourceNode)
 					self.buildVirtualSourceTreeRecurse(newSourceNode, level+1, maxLevel)
 
@@ -276,59 +286,52 @@ class EMScene(object):
 			print "Error: Trying to initialize virtual sources but no initial source specified"
 			return
 		self.vSources = []
-		rootSource = EMVSourceNode(self.Source, None, None, Matrix4(), None)
+		rootSource = EMVSourceNode(self.Source, None, None, None)
 		self.buildVirtualSourceTreeRecurse(rootSource, 0, maxLevel)
 	
 	#This assumes the source tree has been built
 	def getPathsToReceiver(self):
 		self.paths = []
-		for sourceNode in self.vSources:
-			currNode = sourceNode
-			#Store the path in reverse order
+		for source in self.vSources:
 			path = [self.Receiver]
+			currSource = source
 			validPath = True
-			while currNode != None:
+			while currSource != None:
 				target = path[-1]
-				ray = Ray3D(currNode.pos, target - currNode.pos)
-				#Get back from roy intersection:
-				#(t, Point, normal, face)
+				P0 = target
+				V = currSource.pos - target
+				ray = Ray3D(P0, V)
 				intersection = self.getRayIntersection(ray)
-				if currNode.parent != None:
-					if intersection == None:
-						#The ray doesn't go through the face
+				if intersection == None:
+					validPath = False
+					break
+				#(t, Point, normal, face)
+				if currSource.parent == None:
+					#The last source
+					if intersection[0] < (target-currSource.pos).Length() - EPS:
+						#Something is blocking the final source
+						validPath = False
+					else:
+						path.append(currSource.pos)
+				else:
+					if intersection[3] != currSource.meshFace:
 						validPath = False
 						break
-					if intersection[3] != currNode.meshFace:
-						#Something is in the way
-						validPath = False
-						break
-				else:
-					#This is the last path
-					if intersection != None:
-						if (intersection[1] - target).squaredMag() > EPS:
-							validPath = False
-							break
-				#All intersection tests passed: this segment of the path is valid
-				if currNode.parent != None:
-					path.append(intersection[1])
-				else:
-					path.append(currNode.pos)
-				currNode = currNode.parent
+					else:
+						#Move the intersection point slightly away from the face
+						path.append(intersection[1]+EPS*intersection[2])
+				currSource = currSource.parent
 			if validPath:
 				self.paths.append(path)
-				print len(path)
-		print "There were %i paths found"%len(self.paths)
 
 #Used to build virtual source trees
 class EMVSourceNode(object):
 	#pos is the position of the virtual source in world coordinates
 	#meshFace is the face around which this source was reflected
-	#transform is the affine transform to get the face into world coordinates
-	def __init__(self, pos, parent, meshFace, transform, EMNode):
+	def __init__(self, pos, parent, meshFace, EMNode):
 		self.pos = pos
 		self.parent = parent
 		self.meshFace = meshFace
-		self.transform = transform
 		self.EMNode = EMNode
 		self.children = []
 			

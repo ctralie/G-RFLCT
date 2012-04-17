@@ -9,6 +9,9 @@ from RayTraceImage import *
 from sys import argv
 import random
 
+SHOWIMAGES = True
+DRAWPATHS = True
+
 class Viewer(object):
 	def __init__(self, filename):
 		#GLUT State variables
@@ -80,6 +83,7 @@ class Viewer(object):
 		#	glVertex3f(P.x, P.y, P.z)
 		#glEnd()
 		
+		
 		if isinstance(self.scene.Source, Point3D):
 			glDisable(GL_LIGHTING)
 			glColor3f(1, 0, 0)
@@ -100,16 +104,62 @@ class Viewer(object):
 			gluSphere(quadric, 0.1, 32, 32)
 			glPopMatrix()
 		
-		glDisable(GL_LIGHTING)
-		glColor3f(1, 0, 0)
-		glBegin(GL_LINES)
-		for path in self.scene.paths:
-			for i in range(0, len(path)-1):
-				P0 = path[i]
-				P1 = path[(i+1)]
+		if DRAWPATHS == True:
+			glDisable(GL_LIGHTING)
+			glColor3f(1, 0, 0)
+			glBegin(GL_LINES)
+			for path in self.scene.paths:
+				for i in range(0, len(path)-1):
+					P0 = path[i]
+					P1 = path[(i+1)]
+					glVertex3f(P0.x, P0.y, P0.z)
+					glVertex3f(P1.x, P1.y, P1.z)
+			glEnd()
+		
+		if SHOWIMAGES == True:
+			if False:
+				if isinstance(self.scene.Source, Point3D):
+					glDisable(GL_LIGHTING)
+					glColor3f(0, 1, 0)
+					glBegin(GL_LINES)
+					P0 = self.scene.Source
+					for source in self.scene.vSources:
+						P1 = source.pos
+						glVertex3f(P0.x, P0.y, P0.z)
+						glVertex3f(P1.x, P1.y, P1.z)				
+					glEnd()
+		
+				if isinstance(self.scene.Receiver, Point3D):
+					glDisable(GL_LIGHTING)
+					glColor3f(0, 1, 1)
+					glBegin(GL_LINES)
+					P0 = self.scene.Receiver
+					for source in self.scene.vSources:
+						P1 = source.pos
+						glVertex3f(P0.x, P0.y, P0.z)
+						glVertex3f(P1.x, P1.y, P1.z)				
+					glEnd()			
+		
+			glDisable(GL_LIGHTING)
+			glColor3f(1, 0, 1)
+			quadric = gluNewQuadric()
+			for source in self.scene.vSources:
+				P = source.pos
+				glPushMatrix()
+				glTranslatef(P.x, P.y, P.z)
+				gluSphere(quadric, 0.1, 32, 32)
+				glPopMatrix()		
+		
+			glDisable(GL_LIGHTING)
+			glBegin(GL_LINES)
+			for ray in self.scene.rays:
+				P0 = ray.P0
+				P1 = ray.P0 + 5*ray.V
+				glColor3f(0, 0.1, 0)
 				glVertex3f(P0.x, P0.y, P0.z)
+				glColor3f(1, 1, 1)
 				glVertex3f(P1.x, P1.y, P1.z)
-		glEnd()
+			glEnd()
 		
 		glutSwapBuffers()
 	
