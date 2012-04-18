@@ -2,6 +2,7 @@ from OpenGL.GL import *
 from OpenGL.GLU import *
 from OpenGL.GLUT import *
 from Primitives3D import *
+from Graphics3D import *
 from PolyMesh import *
 from Cameras3D import *
 from EMScene import *
@@ -27,9 +28,22 @@ class Viewer(object):
 		
 		#Camera state variables
 		self.scene = EMScene()
-		self.scene.Read(filename)
+		#self.scene.Read(filename)
+		scene = self.scene
+		node = scene.rootEMNode
+		boxMesh = getBoxMesh(5.1, 5.1, 2.5, Point3D(0, 0, 0))
+		EMMat = EMMaterial(0.9, 0)
+		sceneNode = EMNode(scene.rootEMNode, boxMesh, Matrix4(), EMMat, OpticalMaterial())
+		scene.rootEMNode.children.append(sceneNode)
+		scene.Source = Point3D(0, 0, -2.0)
+		scene.Receiver = Point3D(0, -1.0, 2.0)
+		scene.getMeshList()
+		scene.buildVirtualSourceTree(3)
+		scene.getPathsToReceiver()
+		response = scene.getSteadyStateSinusoid(915, 40, 10)
+		print "times = %s; signal = %s"%(response[0], response[1])
+		
 		self.camera = MouseSphericalCamera(self.GLUTwindow_width, self.GLUTwindow_height)
-		self.camera.center = Point3D(1, 1, 1)
 		random.seed()
 		self.rayPoints = []
 		self.rayNormals = []

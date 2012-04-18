@@ -17,20 +17,20 @@
 			kt = "0 0 0 "
 			emission = "0 0 0 "/>
 	</OpticalMaterials>
-	<Source pos = "0 1.4 -2"/>
-	<Receiver pos = "1 1.1 0"/>
-	<box length = "5" width = "5" height = "2.5" center = "0 1.25 0">
+	<Source pos = "0 0 -2"/>
+	<Receiver pos = "0 0 2"/>
+	<box length = "5" width = "5" height = "2.5" center = "0 0 0">
 		1 0 0 0
 		0 1 0 0
 		0 0 1 0
 		0 0 0 1
 	</box>
-	<include filename = "table.xml">
+	<!--<include filename = "table.xml">
 		2 0 0 -2
-		0 1 0 0
+		0 1 0 -1.25
 		0 0 1 -2
 		0 0 0 1
-	</include>
+	</include>!-->
 	<!--<node>
 		1 0 0 0
 		0 1 0 0

@@ -36,6 +36,7 @@ class EMScene(object):
 		self.Receiver = None
 		self.vSources = [] #Virtual sources
 		self.paths = [] #Paths discovered from source to receiver
+		self.pathAttens = [] #Path attenuations from bouncing
 		self.rays = [] #For debugging
 
 	def Read(self, filename):
@@ -293,8 +294,10 @@ class EMScene(object):
 	#This assumes the source tree has been built
 	def getPathsToReceiver(self):
 		self.paths = []
+		self.pathAttens = []
 		for source in self.vSources:
 			path = [self.Receiver]
+			pathAtten = 1
 			currSource = source
 			validPath = True
 			while currSource != None:
@@ -321,10 +324,49 @@ class EMScene(object):
 					else:
 						#Move the intersection point slightly away from the face
 						path.append(intersection[1]+EPS*intersection[2])
+						#Reflection coefficient
+						pathAtten = pathAtten*source.EMNode.EMMat.R
 				currSource = currSource.parent
 			if validPath:
 				self.paths.append(path)
+				self.pathAttens.append(pathAtten)
 		print "There were %i paths found"%len(self.paths)
+
+	#Calculate the impulse response given the paths and their attenuations
+	#Returns a list of tuples of the form (attenuation, phase delay, )
+	#fMhz is the operating frequency in MHz
+	def getImpulseResponse(self, fMhz):
+		response = [(0, 0)]*len(self.paths)
+		c = 3e8 #Speed of light
+		for i in range(0, len(self.paths)):
+			totalDist = 0
+			path = self.paths[i]
+			loss = self.pathAttens[i]#Start off with the loss from reflection
+			#Loop through each leg of the path and compute its length
+			#which is used to figure out loss and time delay
+			for j in range(0, len(path)-1):
+				dVec = path[j+1] - path[j]
+				d = dVec.Length()
+				totalDist = totalDist + d
+			phaseDelay = totalDist / c
+			#Friis ideal free space path loss
+			pathLoss = (300/(4*math.pi*fMhz*totalDist))**2
+			if pathLoss < 1:
+				loss = loss*pathLoss
+			response[i] = (loss, phaseDelay, len(path)-2)
+		return response
+	
+	def getSteadyStateSinusoid(self, fMhz, SampsPerCycle, NCycles):
+		T = 1/(fMhz*1e6)
+		dt = T/SampsPerCycle
+		impulses = self.getImpulseResponse(fMhz)
+		signal = [0]*SampsPerCycle*NCycles
+		times = [dt*i for i in range(0, len(signal))]
+		for impulse in impulses:
+			A = impulse[0]
+			phi = impulse[1]
+			signal = [signal[i] + A*math.cos(2*math.pi*fMhz*1e6*(dt*i - phi)) for i in range(0, len(signal))]
+		return (times, signal)
 
 #Used to build virtual source trees
 class EMVSourceNode(object):
