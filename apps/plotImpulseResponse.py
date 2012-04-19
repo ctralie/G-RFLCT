@@ -24,7 +24,7 @@ if __name__ == '__main__':
 	else:
 		[W, L, H, rx, ry, R] = [float(argv[i]) for i in range(1, 7)]
 		print "Loading data..."
-		groundTruth = pickle.load(open("groundTruth.dat", "rb"))
+		groundTruth = pickle.load(open("groundTruth915.dat", "rb"))
 		print "Finished loading data..."
 		data = groundTruth[getKeyString(W, L, H, rx, ry, R)]
 		plotImpulseResponse(data[2], W, L, H, rx, ry, R)

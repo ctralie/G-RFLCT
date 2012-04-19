@@ -18,20 +18,24 @@ def getKeyString(W, L, H, rx, ry, R):
 if __name__ == '__main__':
 	[W, L, H, R] = [5.0, 5.0, 2.5, 0.9]
 	print "Loading data..."
-	groundTruth = pickle.load(open("groundTruthNoComposite.dat", "rb"))
+	groundTruth = pickle.load(open("groundTruth.dat", "rb"))
 	print "Finished Loading data"
 	#First calculate all of the signal energies
 	maxEnergy = 0.0
 	dSquared = 16.0
 	signalEnergies = {}
 	#groundTruth[keyStr] = (sinusoidResponse[0], sinusoidResponse[1], impulseResponse)
+	allEnergy = 0.0
 	for key, data in groundTruth.items():
 		signal = data[1]
 		Energy = sum(val**2 for val in signal)
+		allEnergy = allEnergy + Energy
 		signalEnergies[key] = Energy
 		if Energy > maxEnergy:
 			maxEnergy = Energy
+	allEnergy = allEnergy / len(groundTruth)
 	sigmaNSqr = maxEnergy/dSquared
+	print "Average dSquared = %g"%(allEnergy/sigmaNSqr)
 	sigmaN = math.sqrt(sigmaNSqr)
 	print "sigmaN = %g\n"%sigmaN
 	
@@ -53,7 +57,7 @@ if __name__ == '__main__':
 	NROCPoints = 100
 	NExperiments = 100
 	#detectionThresh = -2.5*Es/nVar:(4.0*Es/nVar)/100.0:1.5*Es/nVar;
-	lnLambdas = [i*4*maxEnergy/sigmaN for i in range(-30, 100)]
+	lnLambdas = [i*500*maxEnergy/sigmaN for i in range(-30, 100)]
 	lambdas = [math.exp(i) for i in lnLambdas]
 	Pf = [0]*len(lambdas)
 	Pd = [0]*len(lambdas)

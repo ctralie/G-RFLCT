@@ -26,7 +26,7 @@ if __name__ == '__main__':
 		print "Usage: plotImpulseResponse W1 L1 H1 rx1 ry1 R1 W2 L2 rx2 ry2 R2"
 	else:
 		print "Loading data..."
-		groundTruth = pickle.load(open("groundTruthAllBefore.dat", "rb"))
+		groundTruth = pickle.load(open("groundTruth.dat", "rb"))
 		print "Finished loading data..."
 		[W1, L1, H1, rx1, ry1, R1] = [float(argv[i]) for i in range(1, 7)]
 		str1 = getKeyString(W1, L1, H1, rx1, ry1, R1)

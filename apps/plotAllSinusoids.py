@@ -23,7 +23,7 @@ def getKeyString(W, L, H, rx, ry, R):
 
 if __name__ == '__main__':
 	print "Loading data..."
-	groundTruth = pickle.load(open("groundTruth.dat", "rb"))
+	groundTruth = pickle.load(open("groundTruth915.dat", "rb"))
 	print "Finished loading data..."
 	data = []
 	times = []
