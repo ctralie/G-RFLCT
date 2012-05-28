@@ -26,12 +26,12 @@ def getKeyString(W, L, H, rx, ry, R):
 if __name__ == '__main__':
 	[W, L, H, R] = [5.0, 5.0, 2.5, 0.9]
 	print "Loading data..."
-	groundTruth = pickle.load(open("groundTruth915.dat", "rb"))
+	groundTruth = pickle.load(open("groundTruth.dat", "rb"))
 	print "Finished Loading data"
 	#First calculate all of the signal energies
 	maxEnergy = 0.0
-	dSquared = 160.0*18.7/31.97 #Average dSquared should be about 18.7 for 915 and 15
 	#dSquared = 160.0
+	dSquared = 160.0*18.7/31.97
 	signalEnergies = {}
 	#groundTruth[keyStr] = (sinusoidResponse[0], sinusoidResponse[1], impulseResponse)
 	for key, data in groundTruth.items():
@@ -50,14 +50,11 @@ if __name__ == '__main__':
 	prior = []
 	for rx in [-1, 0, 1]:
 		for ry in [-1, 0, 1]:
-			for dW in boxUncertainty:
-				for dL in boxUncertainty:
-					for dH in boxUncertainty:
-						keyStr = getKeyString(W+dW, L+dL, H+dH, rx, ry, R)
-						s = (groundTruth[keyStr])[1]
-						signals.append(s)
-						energies.append(signalEnergies[keyStr])
-						prior.append(dBoxProbs[dW]*dBoxProbs[dL]*dBoxProbs[dH]/9.0)
+			keyStr = getKeyString(W, L, H, rx, ry, R)
+			s = (groundTruth[keyStr])[1]
+			signals.append(s)
+			energies.append(signalEnergies[keyStr])
+			prior.append(1.0/9.0)
 	NComposite = len(signals)
 	signalChoices = []
 	for rx in [-1, 0, 1]:
@@ -65,7 +62,7 @@ if __name__ == '__main__':
 			keyStr = getKeyString(W, L, H, rx, ry, R)
 			signalChoices.append(groundTruth[keyStr][1])
 	for choiceSignal in range(0, 9):
-		print "post2x%i = ["%choiceSignal,
+		print "post3x%i = ["%choiceSignal,
 		s = signalChoices[choiceSignal]
 		noise = pylab.randn(len(s), 1)
 		r = [s[k] + sigmaN*noise[k][0] for k in range(0, len(s))]

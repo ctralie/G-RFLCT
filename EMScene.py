@@ -255,7 +255,7 @@ class EMScene(object):
 
 	def buildVirtualSourceTreeRecurse(self, currNode, level, maxLevel):
 		self.vSources.append(currNode)
-		if level == maxLevel:
+		if level == maxLevel: #The maximum number of bounces allowed has been reached
 			return
 		#Try to mirror this source around every face in the scene
 		for m in self.meshes:
@@ -280,6 +280,7 @@ class EMScene(object):
 					mirrorP0 = facePoints[0] + parFaceV - perpFaceV
 					newSourceNode = EMVSourceNode(mirrorP0, currNode, f, m.EMNode)
 					currNode.children.append(newSourceNode)
+					#Now recursively make the virtual images for this new image
 					self.buildVirtualSourceTreeRecurse(newSourceNode, level+1, maxLevel)
 
 	def buildVirtualSourceTree(self, maxLevel):

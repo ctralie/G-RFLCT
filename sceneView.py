@@ -11,7 +11,7 @@ from sys import argv
 import random
 
 SHOWIMAGES = False
-DRAWPATHS = True
+DRAWPATHS = False
 
 class Viewer(object):
 	def __init__(self, filename):

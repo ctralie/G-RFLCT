@@ -16,6 +16,12 @@ class BBox3D(object):
 	def ZLen(self):
 		return self.zmax - self.zmin
 	
+	def getDiagLength(self):
+		dX = self.XLen()/2
+		dY = self.YLen()/2
+		dZ = self.ZLen()/2
+		return math.sqrt(dX*dX + dY*dY + dZ*dZ)
+	
 	def getCenter(self):
 		return Point3D((self.xmax+self.xmin)/2.0, (self.ymax+self.ymin)/2.0, (self.zmax+self.zmin)/2.0)
 	

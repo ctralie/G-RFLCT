@@ -1,4 +1,4 @@
-#Uncertainty with detector that models uncertainty
+#Uncertainty with detector that does not model uncertainty
 import numpy 
 import pylab
 import pickle
@@ -38,16 +38,12 @@ def lambdaSKE(r, s, Es, sigmaNSqr):
 
 def lambdaComposite(r, sigmaNSqr, groundTruth, signalEnergies):
 	ret = 0.0
-	for dW in boxUncertainty:
-		for dL in boxUncertainty:
-			for dH in boxUncertainty:
-				for rx in [-1, 0, 1]:
-					for ry in [-1, 0, 1]:
-						prob = dBoxProbs[dW]*dBoxProbs[dL]*dBoxProbs[dH]/9.0
-						keyStr = getKeyString(W+dW, L+dL, H+dH, rx, ry, R)
-						s = (groundTruth[keyStr])[1]
-						Es = signalEnergies[keyStr]
-						ret = ret + prob*lambdaSKE(r, s, Es, sigmaNSqr)
+	for rx in [-1, 0, 1]:
+		for ry in [-1, 0, 1]:
+			keyStr = getKeyString(W, L, H, rx, ry, R)
+			s = (groundTruth[keyStr])[1]
+			Es = signalEnergies[keyStr]
+			ret = ret + lambdaSKE(r, s, Es, sigmaNSqr)/9.0
 	return ret
 	#return sum([lambdaSKE(r, signals[i], energies[i], sigmaNSqr)/float(len(signals)) for i in range(0, len(signals))])
 	
@@ -79,9 +75,12 @@ if __name__ == '__main__':
 	#Now calculate ROC curve
 	print "sigmaNSqr = %g\n"%sigmaNSqr
 	print "maxEnergy = %g\n"%maxEnergy
-	NExperiments = 100
+	NExperiments = 1000
 	#detectionThresh = -2.5*Es/nVar:(4.0*Es/nVar)/100.0:1.5*Es/nVar;
-	lnLambdas = [i*20*maxEnergy/sigmaN for i in range(-500, 500)]
+	lnLambdas = [i*5*maxEnergy/sigmaN for i in range(-100000, 100000)]
+	for i in range(0, len(lnLambdas)):
+		if lnLambdas[i] > 300:
+			lnLambdas[i] = 300
 	lambdas = [math.exp(i) for i in lnLambdas]
 	print "Min Lambda = %g, Max lambda = %g"%(lambdas[0], lambdas[-1])
 	
@@ -90,8 +89,8 @@ if __name__ == '__main__':
 	#def lambdaComposite(r, sigmaNSqr, groundTruth, signalEnergies):
 	for i in range(0, NExperiments):
 		#Randomly choose one of the signals
-		rx = posUncertainty[random.randint(0, 2)]
-		ry = posUncertainty[random.randint(0, 2)]
+		rx = posUncertainty[int(math.floor(random.random()*3))%3]
+		ry = posUncertainty[int(math.floor(random.random()*3))%3]
 		thisW = W + sampleBoxUncertainty()
 		thisL = L + sampleBoxUncertainty()
 		thisH = H + sampleBoxUncertainty()
@@ -122,6 +121,7 @@ if __name__ == '__main__':
 				false = false + 1
 		Pf[i] = float(false) / float(NExperiments)
 		Pd[i] = float(detected) / float(NExperiments)
-	pickle.dump((Pf, Pd), open('ROCsExp2highsnr915.txt', 'wb'))
+	pickle.dump((Pf, Pd), open('ROCsExp3highsnr915.txt', 'wb'))
+	print "There are %i ROC points"%len(Pf)
 	pylab.plot(Pf, Pd, 'b.')
 	pylab.show()

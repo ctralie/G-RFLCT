@@ -18,11 +18,11 @@ def getKeyString(W, L, H, rx, ry, R):
 if __name__ == '__main__':
 	[W, L, H, R] = [5.0, 5.0, 2.5, 0.9]
 	print "Loading data..."
-	groundTruth = pickle.load(open("groundTruth.dat", "rb"))
+	groundTruth = pickle.load(open("groundTruth915.dat", "rb"))
 	print "Finished Loading data"
 	#First calculate all of the signal energies
 	maxEnergy = 0.0
-	dSquared = 16.0
+	dSquared = 160.0*18.7/31.97 #Average dSquared should be about 18.7 for 915 and 15
 	signalEnergies = {}
 	#groundTruth[keyStr] = (sinusoidResponse[0], sinusoidResponse[1], impulseResponse)
 	allEnergy = 0.0
@@ -57,7 +57,7 @@ if __name__ == '__main__':
 	NROCPoints = 100
 	NExperiments = 100
 	#detectionThresh = -2.5*Es/nVar:(4.0*Es/nVar)/100.0:1.5*Es/nVar;
-	lnLambdas = [i*500*maxEnergy/sigmaN for i in range(-30, 100)]
+	lnLambdas = [0.5*i*maxEnergy/sigmaN for i in range(-100, 200)]
 	lambdas = [math.exp(i) for i in lnLambdas]
 	Pf = [0]*len(lambdas)
 	Pd = [0]*len(lambdas)
@@ -87,6 +87,6 @@ if __name__ == '__main__':
 			num = num + 1
 		Pf[i] = float(false) / float(num)
 		print "Finished lambda = %g (%i of %i): Pf = %g, Pd = %g"%(cutoff, i+1, len(lambdas), Pf[i], Pd[i])
-		pickle.dump((Pf, Pd), open('ROCsExp1.txt', 'wb'))
+		pickle.dump((Pf, Pd), open('ROCsExp1highsnr915.txt', 'wb'))
 	pylab.plot(Pf, Pd, 'b.')
 	pylab.show()

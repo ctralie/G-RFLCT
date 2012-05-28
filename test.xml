@@ -20,8 +20,8 @@
 	<Source pos = "0 0 -2"/>
 	<Receiver pos = "0 0 2"/>
 	<box length = "5" width = "5" height = "2.5" center = "0 0 0">
+		1 1 0 0
 		1 0 0 0
-		0 1 0 0
 		0 0 1 0
 		0 0 0 1
 	</box>

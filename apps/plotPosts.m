@@ -9,7 +9,7 @@ function [] = plotPosts(posts)
 			subplot(3, 3, k);
 			plot(posts(k, :));
 			axis([1, N, 0, 1]);
-			title(sprintf('Receiver Position (%i, %i, -2)', pos(i), pos(j)));
+			title(sprintf('Source Position (%i, %i, -2)', pos(i), pos(j)));
 		end
 	end
 	lastPost = posts(:, N);

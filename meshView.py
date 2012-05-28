@@ -26,7 +26,8 @@ class Viewer(object):
 		print self.mesh
 		#self.mesh.truncate(0.2)
 		#print self.mesh
-		self.camera = MouseSphericalCamera(self.GLUTwindow_width, self.GLUTwindow_height)
+		#self.camera = MouseSphericalCamera(self.GLUTwindow_width, self.GLUTwindow_height)
+		self.camera = MousePolarCamera(self.GLUTwindow_width, self.GLUTwindow_height)
 		self.camera.centerOnMesh(self.mesh)
 		random.seed()
 		
@@ -113,7 +114,7 @@ class Viewer(object):
 		dX = self.GLUTmouse[0] - lastX
 		dY = self.GLUTmouse[1] - lastY
 		if self.GLUTButton[2] == 1:
-			self.camera.zoom(dY)
+			self.camera.zoom(-dY)#Want to zoom in as the mouse goes up
 		elif self.GLUTButton[1] == 1:
 			self.camera.translate(dX, dY)
 		else:

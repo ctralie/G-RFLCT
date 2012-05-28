@@ -7,6 +7,26 @@ from Primitives3D import *
 from Shapes3D import *
 import math
 
+#This function pushes a matrix onto the stack that puts everything
+#in the frame of a camera which is centered at position "P",
+#is pointing towards "t", and has vector "r" to the right
+#t - towards vector
+#u - up vector
+#r - right vector
+#P - Camera center
+def gotoCameraFrame(t, u, r, P):
+	rotMat = Matrix4([r.x, u.x, -t.x, 0, r.y, u.y, -t.y, 0, r.z, u.z, -t.z, 0, 0, 0, 0, 1])
+	rotMat = rotMat.Inverse()
+	transMat = Matrix4([1, 0, 0, -P.x, 0, 1, 0, -P.y, 0, 0, 1, -P.z, 0, 0, 0, 1])
+	#Translate first then rotate
+	mat = rotMat*transMat
+	#OpenGL is column major and mine are row major so take transpose
+	mat = mat.Transpose()
+	glMatrixMode(GL_MODELVIEW)
+	glLoadIdentity()
+	glMultMatrixd(mat.m)
+
+
 class Key6DOFCamera(object):
 	def __init__(self, eye, towards = Vector3D(0, 0, 1), up = Vector3D(0, 1, 0), yfov = 0.75):
 		self.eye = eye
@@ -14,34 +34,13 @@ class Key6DOFCamera(object):
 		self.up = up
 		self.yfov = yfov
 		self.keys = {}
-		self.LINEAR_RATE = 0.15
+		self.LINEAR_RATE = 0.02
 		self.ANGULAR_RATE = 0.01
 		self.minTimestepLen = 1 #Minimum Timestep Length (msecs)
 		self.zP = Point3D(0, 0, 0) #Zero Point (used for axis rotation)
-	
-	#Return a column-major matrix that puts a point in the camera's coordinate frame
-	def getColMajorMatrix(self):
-		#TODO: Make this (slightly) more efficient by doing transposition up-front
-		(t, u) = (self.towards, self.up)
-		r = t%u
-		t.normalize()
-		u.normalize()
-		r.normalize()
-		eye = self.eye
-		trans = Matrix4([1, 0, 0, -eye.x, 0, 1, 0, -eye.y, 0, 0, 1, -eye.z, 0, 0, 0, 1])
-		rot = Matrix4([r.x, r.y, r.z, 0, u.x, u.y, u.z, 0, t.x, t.y, t.z, 0, 0, 0, 0, 1])
-		cameraMatrix = rot * trans
-		return cameraMatrix.Transpose()
 		
 	def gotoCameraFrame(self):
-		t = self.towards
-		u = self.up
-		r = t % u
-		mat = [r.x, u.x, t.x, 0, r.y, u.y, t.y, 0, r.z, u.z, t.z, 0, 0, 0, 0, 1]
-		glMatrixMode(GL_MODELVIEW)
-		glLoadIdentity()
-		glMultMatrixd(mat)
-		glTranslated(self.eye.x, self.eye.y, self.eye.z)
+		gotoCameraFrame(self.towards, self.up, self.towards%self.up, self.eye)
 
 	def Roll(self, theta):
 		self.up = rotateAroundAxis(self.zP, self.towards, theta, self.up)
@@ -61,9 +60,9 @@ class Key6DOFCamera(object):
 
 	def handleUserInput(self, value):
 		if self.keyPressed('w', 'W'):
-			self.eye = self.eye - self.LINEAR_RATE*self.towards
-		if self.keyPressed('s', 'S'):
 			self.eye = self.eye + self.LINEAR_RATE*self.towards
+		if self.keyPressed('s', 'S'):
+			self.eye = self.eye - self.LINEAR_RATE*self.towards
 		if self.keyPressed('a', 'A'):
 			self.eye = self.eye - self.LINEAR_RATE*(self.towards%self.up)
 		if self.keyPressed('d', 'D'):
@@ -73,17 +72,17 @@ class Key6DOFCamera(object):
 		if self.keyPressed('c', 'C'):
 			self.eye = self.eye - self.LINEAR_RATE*self.up
 		if self.keyPressed('e', 'E'):
-			self.Roll(self.ANGULAR_RATE)
-		if self.keyPressed('q', 'Q'):
 			self.Roll(-self.ANGULAR_RATE)
+		if self.keyPressed('q', 'Q'):
+			self.Roll(self.ANGULAR_RATE)
 		if self.keyPressed(GLUT_KEY_DOWN):
-			self.Pitch(-self.ANGULAR_RATE)
-		if self.keyPressed(GLUT_KEY_UP):
 			self.Pitch(self.ANGULAR_RATE)
+		if self.keyPressed(GLUT_KEY_UP):
+			self.Pitch(-self.ANGULAR_RATE)
 		if self.keyPressed(GLUT_KEY_LEFT):
-			self.Yaw(-self.ANGULAR_RATE)
-		if self.keyPressed(GLUT_KEY_RIGHT):
 			self.Yaw(self.ANGULAR_RATE)
+		if self.keyPressed(GLUT_KEY_RIGHT):
+			self.Yaw(-self.ANGULAR_RATE)
 		glutTimerFunc(self.minTimestepLen, self.handleUserInput, 1)
 		glutPostRedisplay()
 
@@ -96,43 +95,38 @@ class Key6DOFCamera(object):
 		return str
 
 class MousePolarCamera(object):
+	#Coordinate system is defined as in OpenGL as a right
+	#handed system with +z out of the screen, +x to the right,
+	#and +y up
+	#phi is CCW down from +y, theta is CCW away from +z
 	def __init__(self, pixWidth, pixHeight, yfov = 0.75):
 		self.pixWidth = pixWidth
 		self.pixHeight = pixHeight
 		self.yfov = yfov
-		self.zP = Point3D(0, 0, 0) #Zero Point (used for axis rotation)
 		self.center = Point3D(0, 0, 0)
 		self.R = 1
-		self.theta = 0 #Angle down from (0, 0, 1) pole
-		self.phi = 0 #Angle around (0, 0, 1) axis
+		self.theta = 0 
+		self.phi = 0 
 		self.updateVecsFromPolar()
 
 	def centerOnMesh(self, mesh):
 		bbox = mesh.getBBox()
 		self.center = bbox.getCenter()
-		self.R = bbox.ZLen()*3
-		self.theta = 0 #Polar vector
-		self.phi = 0
+		self.R = bbox.getDiagLength()*3
+		self.theta = -math.pi/2
+		self.phi = math.pi/2
 		self.updateVecsFromPolar()
-	
+
 	def updateVecsFromPolar(self):
 		[sinT, cosT, sinP, cosP] = [math.sin(self.theta), math.cos(self.theta), math.sin(self.phi), math.cos(self.phi)]
-		self.towards = Vector3D(-sinT*cosP, -sinT*sinP, -cosT)
-		self.up = Vector3D(sinP, -cosP, 0)
-		if (self.towards.squaredMag() < EPS):
-			self.towards = Vector3D(0, 0, 1)
-			self.up = Vector3D(0, 1, 0)
+		#Make the camera look inwards
+		#i.e. towards is -dP(R, phi, theta)/dR, where P(R, phi, theta) is polar position
+		self.towards = Vector3D(-sinP*cosT, -cosP, sinP*sinT)
+		self.up = Vector3D(-cosP*cosT, sinP, cosP*sinT)
 		self.eye = self.center - self.R*self.towards
 
 	def gotoCameraFrame(self):
-		t = self.towards
-		u = self.up
-		r = t % u
-		mat = [r.x, u.x, t.x, 0, r.y, u.y, t.y, 0, r.z, u.z, t.z, 0, 0, 0, 0, 1]
-		glMatrixMode(GL_MODELVIEW)
-		glLoadIdentity()
-		glMultMatrixd(mat)
-		glTranslated(self.eye.x, self.eye.y, self.eye.z)
+		gotoCameraFrame(self.towards, self.up, self.towards%self.up, self.eye)
 	
 	def orbitUpDown(self, dP):
 		dP = 1.5*dP/float(self.pixHeight)
@@ -141,14 +135,12 @@ class MousePolarCamera(object):
 	
 	def orbitLeftRight(self, dT):
 		dT = 1.5*dT/float(self.pixWidth)
-		self.theta = self.theta+dT
+		self.theta = self.theta-dT
 		self.updateVecsFromPolar()
 	
 	def zoom(self, rate):
 		rate = rate / float(self.pixHeight)
-		self.R = self.R + rate*pow(4, rate/self.R)
-		if self.R < 0:
-			self.R = 0
+		self.R = self.R*pow(4, rate)
 		self.updateVecsFromPolar()
 	
 	def translate(self, dx, dy):
@@ -181,7 +173,7 @@ class MouseSphericalCamera(object):
 		self.yfov = yfov
 		self.zP = Point3D(0, 0, 0) #Zero Point (used for axis rotation)
 		self.center = Point3D(0, 0, 0)
-		self.eye = Point3D(1, 0, 0)
+		self.eye = Point3D(0, 0, 1)
 		self.towards = Vector3D(0, 0, -1)
 		self.up = Vector3D(0, 1, 0)
 
@@ -190,40 +182,28 @@ class MouseSphericalCamera(object):
 		self.center = bbox.getCenter()
 		self.towards = Vector3D(0, 0, -1)
 		self.up = Vector3D(0, 1, 0)
-		self.eye = self.center - (bbox.XLen()*3)*self.towards
+		self.eye = self.center - (bbox.getDiagLength()*3)*self.towards
 
 	def gotoCameraFrame(self):
-		t = self.towards
-		u = self.up
-		r = t%u
-		P = self.eye
-		rotMat = Matrix4([r.x, u.x, -t.x, 0, r.y, u.y, -t.y, 0, r.z, u.z, -t.z, 0, 0, 0, 0, 1])
-		rotMat = rotMat.Inverse()
-		transMat = Matrix4([1, 0, 0, -P.x, 0, 1, 0, -P.y, 0, 0, 1, -P.z, 0, 0, 0, 1])
-		mat = rotMat*transMat
-		mat = mat.Transpose()
-		glMatrixMode(GL_MODELVIEW)
-		glLoadIdentity()
-		glMultMatrixd(mat.m)
+		gotoCameraFrame(self.towards, self.up, self.towards%self.up, self.eye)
 	
 	def orbitUpDown(self, dTheta):
 		dTheta = 1.5*dTheta / float(self.pixHeight)
 		right = self.towards % self.up
 		self.eye = rotateAroundAxis(self.center, right, dTheta, self.eye)
-		self.up = rotateAroundAxis(Point3D(0, 0, 0), right, dTheta, self.up)
-		self.towards = rotateAroundAxis(Point3D(0, 0, 0), right, dTheta, self.towards)
+		self.up = rotateAroundAxis(self.zP, right, dTheta, self.up)
+		self.towards = rotateAroundAxis(self.zP, right, dTheta, self.towards)
 	
 	def orbitLeftRight(self, dTheta):
 		dTheta = 1.5*dTheta / float(self.pixWidth)
 		self.eye = rotateAroundAxis(self.center, self.up, -dTheta, self.eye)
-		self.towards = rotateAroundAxis(Point3D(0, 0, 0), self.up, -dTheta, self.towards)
-	
+		self.towards = rotateAroundAxis(self.zP, self.up, -dTheta, self.towards)
+
 	def zoom(self, rate):
-		rate = 6.0*rate / float(self.pixHeight)
-		R = self.center - self.eye
-		self.eye = self.eye + (rate*pow(2,rate/R.squaredMag()))*self.towards
-		self.towards = self.center - self.eye
-		self.towards.normalize()
+		rate = rate / float(self.pixHeight)
+		R = self.eye - self.center
+		R = pow(4, rate)*R
+		self.eye = self.center + R
 	
 	def translate(self, dx, dy):
 		length = (self.center-self.eye).Length()*math.tan(self.yfov);
