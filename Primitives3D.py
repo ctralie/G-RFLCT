@@ -344,11 +344,13 @@ class Ray3D(object):
 		if len(verts) < 3:
 			return None
 		lastCross = (verts[1] - verts[0]) % (intersectP - verts[1])
+		lastCross.normalize()
 		for i in range(1, len(verts)):
 			v0 = verts[i]
 			v1 = verts[(i+1)%len(verts)]
 			cross = (v1 - v0) % (intersectP - v1)
-			if cross.Dot(lastCross) < 0: #The point must be on the outside
+			cross.normalize()
+			if cross.Dot(lastCross) < EPS: #The intersection point is on the outside of the polygon
 				return None
 			lastCross = cross
 		return [t, intersectP]

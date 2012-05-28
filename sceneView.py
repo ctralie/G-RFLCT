@@ -216,7 +216,8 @@ class Viewer(object):
 						self.rayNormals.append(intersection[1])
 						self.rayNormals.append(intersection[1]+0.1*intersection[2])
 		elif key in ['t', 'T']:
-			RayTraceImage(self.scene, self.camera, 100, 100, "out.png")
+			self.rayNormals = []
+			(self.rayPoints, self.rayNormals) = RayTraceImage(self.scene, self.camera, 50, 50, "out.png")
 		glutPostRedisplay()
 	
 	def GLUTSpecial(self, key, x, y):
@@ -245,7 +246,7 @@ class Viewer(object):
 		dX = self.GLUTmouse[0] - lastX
 		dY = self.GLUTmouse[1] - lastY
 		if self.GLUTButton[2] == 1:
-			self.camera.zoom(dY)
+			self.camera.zoom(-dY)
 		elif self.GLUTButton[1] == 1:
 			self.camera.translate(dX, dY)
 		else:

@@ -19,14 +19,16 @@ def ConstructRayThroughPixel(camera, x, y, width, height):
 	right.normalize()
 	P1 = P0 + towards - tanX*right
 	P2 = P0 + towards + tanX*right
-	P = P1 + ((float(x) + 0.5) / float(width))*(P2 - P1)
+	P = P1 + (float(x)/float(width))*(P2 - P1)
 	farwidth = (P2 - P1).Length()
-	P = P + (float(y-float(height)/2.0)/(float(height)/2.0)*tanY)*up
+	P = P + (float(height-y)/float(height)-0.5)*(tanY*up)
 	directionVec = P - P0
 	directionVec.normalize()
 	return Ray3D(P0, directionVec)
 	
 def RayTraceImage(scene, camera, width, height, filename):
+	rayPoints = []
+	rayNormals = []
 	im = Image.new("RGB", (width, height))
 	pix = im.load()
 	for x in range(0, width):
@@ -36,6 +38,19 @@ def RayTraceImage(scene, camera, width, height, filename):
 			intersection = scene.getRayIntersection(ray)
 			if intersection != None:
 				pix[x, y] = (255, 255, 255)
+				rayPoints.append(ray.P0)
+				rayPoints.append(intersection[1])
+				rayNormals.append(intersection[1])
+				rayNormals.append(intersection[1]+0.1*intersection[2])
+				print "Face %i"%intersection[3].ID
 			else:
 				pix[x, y] = (20, 20, 20)
 	im.save(filename)
+	return (rayPoints, rayNormals)
+
+if __name__ == '__main__':
+	im = Image.new("RGB", (400, 400))
+	pix = im.load()
+	for i in range(0, 400):
+		pix[i, i] = (255, 255, 255)
+	im.save("diag.png")

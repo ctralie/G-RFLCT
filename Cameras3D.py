@@ -1,5 +1,3 @@
-#TODO: These cameras need some serious work; I screwed up the coordinate systems
-#and made them left-handed by accident 
 from OpenGL.GL import *
 from OpenGL.GLU import *
 from OpenGL.GLUT import *
