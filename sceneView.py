@@ -62,7 +62,7 @@ class Viewer(object):
 		#Set up projection matrix
 		glMatrixMode(GL_PROJECTION)
 		glLoadIdentity()
-		gluPerspective(180.0*self.camera.yfov/M_PI, float(self.GLUTwindow_width)/self.GLUTwindow_height, 0.01, 100.0)
+		gluPerspective(180.0*self.camera.yfov/math.pi, float(self.GLUTwindow_width)/self.GLUTwindow_height, 0.01, 100.0)
 		
 		#Set up modelview matrix
 		self.camera.gotoCameraFrame()	
@@ -217,7 +217,7 @@ class Viewer(object):
 						self.rayNormals.append(intersection[1]+0.1*intersection[2])
 		elif key in ['t', 'T']:
 			self.rayNormals = []
-			(self.rayPoints, self.rayNormals) = RayTraceImage(self.scene, self.camera, 50, 50, "out.png")
+			RayTraceImage(self.scene, self.camera, 50, 50, "out.png")
 		glutPostRedisplay()
 	
 	def GLUTSpecial(self, key, x, y):

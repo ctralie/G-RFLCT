@@ -83,6 +83,8 @@ class Viewer(object):
 			self.drawEdges = 1 - self.drawEdges
 		elif key in ['v', 'V']:
 			self.drawVerts = 1 - self.drawVerts
+		elif key in ['n', 'N']:
+			self.drawNormals = 1 - self.drawNormals
 		elif key in ['r', 'R']:
 			self.mesh.splitFaces()
 			print self.mesh

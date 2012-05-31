@@ -17,12 +17,11 @@ def ConstructRayThroughPixel(camera, x, y, width, height):
 	towards.normalize()
 	up.normalize()
 	right.normalize()
-	P1 = P0 + towards - tanX*right
-	P2 = P0 + towards + tanX*right
-	P = P1 + (float(x)/float(width))*(P2 - P1)
+	P1 = towards - tanX*right
+	P2 = towards + tanX*right
+	directionVec = P1 + (float(x)/float(width))*(P2 - P1)
 	farwidth = (P2 - P1).Length()
-	P = P + (float(height-y)/float(height)-0.5)*(tanY*up)
-	directionVec = P - P0
+	directionVec = directionVec + (float(height-y)/float(height)-0.5)*(tanY*up)
 	directionVec.normalize()
 	return Ray3D(P0, directionVec)
 	

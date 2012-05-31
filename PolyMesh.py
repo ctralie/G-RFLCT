@@ -657,28 +657,68 @@ class PolyMesh(object):
 		topology = nV-nE+nF
 		return "PolyMesh Object: NVertices = %i, NEdges = %i, NFaces = %i, topology=%i"%(nV, nE, nF, topology)	
 
-def getBoxMesh(L = 1, W = 1, H = 1, C = Point3D(0, 0, 0)):
-	P1 = Point3D(C.x-W/2, C.y-H/2, C.z+L/2)
-	P2 = Point3D(C.x+W/2, C.y-H/2, C.z+L/2)
-	P3 = Point3D(C.x+W/2, C.y+H/2, C.z+L/2)
-	P4 = Point3D(C.x-W/2, C.y+H/2, C.z+L/2)
-	P5 = Point3D(C.x-W/2, C.y-H/2, C.z-L/2)
-	P6 = Point3D(C.x+W/2, C.y-H/2, C.z-L/2)
-	P7 = Point3D(C.x+W/2, C.y+H/2, C.z-L/2)
-	P8 = Point3D(C.x-W/2, C.y+H/2, C.z-L/2)
+#Helper function for getBoxMesh and addFaceTiles
+def makeBoxEdge(mesh, v1, v2, stepSize):
+	if stepSize < 0:
+		return [v1, v2]
+	verts = [v1]
+	direc = v2.pos - v1.pos
+	frac = stepSize/direc.Length()
+	N = int(math.floor(1.0/frac))
+	for i in range(1, N):
+		newVert = mesh.addVertex(v1.pos+direc*frac*i)
+		verts.append(newVert)
+	verts.append(v2)
+	return verts
+
+#Helper function for getBoxMesh
+def addFaceTiles(mesh, stepSize, ebott, eright, etop, eleft):
+	topRow = etop
+	index = 1
+	for index in range(1, len(eleft)):
+		bottomRow = None
+		if index == len(eleft)-1:
+			bottomRow = ebott
+		else:
+			bottomRow = makeBoxEdge(mesh, eleft[index], eright[index], stepSize)
+		#Now add the square faces on this part
+		for i in range(0, len(topRow)-1):
+			mesh.addFace([bottomRow[i], bottomRow[i+1], topRow[i+1], topRow[i]])
+		topRow = bottomRow
+
+#L is length along z
+#W is width along x
+#H is height along y
+def getBoxMesh(L = 1.0, W = 1.0, H = 1.0, stepSize = -1, C = Point3D(0, 0, 0)):
 	mesh = PolyMesh()
-	[V1, V2] = [mesh.addVertex(P1), mesh.addVertex(P2)]
-	[V3, V4] = [mesh.addVertex(P3), mesh.addVertex(P4)]
-	[V5, V6] = [mesh.addVertex(P5), mesh.addVertex(P6)]
-	[V7, V8] = [mesh.addVertex(P7), mesh.addVertex(P8)]
-	#Add faces with vertices specified in counter-clockwise 
-	#order with respect to the face normal
-	mesh.addFace([V1, V2, V3, V4]) #Front face
-	mesh.addFace([V8, V7, V6, V5]) #Back face
-	mesh.addFace([V4, V8, V5, V1]) #Left face
-	mesh.addFace([V6, V7, V3, V2]) #Right face
-	mesh.addFace([V4, V3, V7, V8]) #Top face
-	mesh.addFace([V2, V1, V5, V6]) #Bottom face
+	endpoints = []
+	for dZ in [L/2.0, -L/2.0]:
+		for dH in [-H/2.0, H/2.0]:
+			for dW in [-W/2.0, W/2.0]:
+				endpoints.append(mesh.addVertex(C+Point3D(dW, dH, dZ)))
+	edgeIndices = [[0, 1], [1, 3], [3, 2], [2, 0], [1, 5], [5, 7], [7, 3], [7, 6], [6, 2], [0, 4], [4, 6], [4, 5]]
+	edges = []
+	edgesRev = []
+	for edgePointers in edgeIndices:
+		[v1, v2] = [endpoints[edgePointers[0]], endpoints[edgePointers[1]]]
+		edges.append(makeBoxEdge(mesh, v1, v2, stepSize))
+	for edge in edges:
+		edgeRev = edge[:]
+		edgeRev.reverse()
+		edgesRev.append(edgeRev)
+	#def addFaceTiles(mesh, stepSize, ebott, eright, etop, eleft):
+	#Front Face
+	addFaceTiles(mesh, stepSize, edges[0], edgesRev[1], edgesRev[2], edges[3])
+	#Back Face
+	addFaceTiles(mesh, stepSize, edgesRev[11], edgesRev[10], edges[7], edgesRev[5])
+	#Left Face
+	addFaceTiles(mesh, stepSize, edgesRev[9], edges[3], edges[8], edgesRev[10])
+	#Right Face
+	addFaceTiles(mesh, stepSize, edges[4], edgesRev[5], edgesRev[6], edgesRev[1])
+	#Top Face
+	addFaceTiles(mesh, stepSize, edgesRev[2], edges[6], edgesRev[7], edges[8])
+	#Bottom Face
+	addFaceTiles(mesh, stepSize, edges[11], edges[4], edges[0], edges[9])
 	return mesh
 
 if __name__ == '__main__':
