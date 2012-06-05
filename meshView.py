@@ -23,7 +23,8 @@ class Viewer(object):
 		#Camera state variables
 		self.mesh = PolyMesh()
 		self.mesh.loadFile(filename)
-		print self.mesh
+		#self.mesh = getBoxMesh(1, 2, 1, Point3D(1, 100, 1), 0.55)
+		#print self.mesh
 		#self.mesh.truncate(0.2)
 		#print self.mesh
 		#self.camera = MouseSphericalCamera(self.GLUTwindow_width, self.GLUTwindow_height)

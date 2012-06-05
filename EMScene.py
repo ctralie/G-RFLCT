@@ -4,8 +4,7 @@ from Shapes3D import *
 from PolyMesh import *
 from OpenGL.GL import *
 import math
-import elementtree.ElementTree as ET
-#TODO: Switch to lxml so I can get line numbers with my errors
+from lxml import etree as ET
 
 class EMMaterial(object):
 	def __init__(self, R = 1.0, T = 0.0):

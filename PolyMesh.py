@@ -664,7 +664,9 @@ def makeBoxEdge(mesh, v1, v2, stepSize):
 	verts = [v1]
 	direc = v2.pos - v1.pos
 	frac = stepSize/direc.Length()
-	N = int(math.floor(1.0/frac))
+	#Round to the nearest integer number of tiles
+	N = int(math.floor(1.0/frac+0.5))
+	frac = 1.0/float(N)
 	for i in range(1, N):
 		newVert = mesh.addVertex(v1.pos+direc*frac*i)
 		verts.append(newVert)
@@ -689,7 +691,11 @@ def addFaceTiles(mesh, stepSize, ebott, eright, etop, eleft):
 #L is length along z
 #W is width along x
 #H is height along y
-def getBoxMesh(L = 1.0, W = 1.0, H = 1.0, stepSize = -1, C = Point3D(0, 0, 0)):
+#stepSize is the length of each square tile.  By default there are no tiles
+#(stepSize = -1).  If one of the sides is not an integer multiple of the step size,
+#then round to the nearest step size that would make it an integer multiple along
+#that dimension
+def getBoxMesh(L = 1.0, W = 1.0, H = 1.0, C = Point3D(0, 0, 0), stepSize = -1):
 	mesh = PolyMesh()
 	endpoints = []
 	for dZ in [L/2.0, -L/2.0]:
