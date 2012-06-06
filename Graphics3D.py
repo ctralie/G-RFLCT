@@ -11,6 +11,23 @@ class OpticalMaterial(object):
 		[self.ka, self.kd, self.ks] = [ka, kd, ks]
 		[self.kt, self.emission] = [kt, emission]
 
+class RadiosityMaterial(object):
+	#em is the emission (RGB)
+	#p is the reflectance (RGB)
+	#incident is the incident light gathered in at one iteration
+	#excident is the best estimate of the radiosity so far
+	def __init__(self, em = RGB3D(0, 0, 0), p = RGB3D(0.5, 0.5, 0.5)):
+		self.em = em
+		self.p = p
+		self.incident = RGB3D(0, 0, 0)
+		self.excident = em
+	
+	#This function is important for when the material gets subdivided
+	def clone(self):
+		ret = RadiosityMaterial(self.em, self.p)
+		ret.incident = self.incident
+		ret.excident = self.excident
+
 #fP0 is the apex of the frustum
 #frustPoints are the points that define the frustum face 
 #(assumed to be convex and specified in order)

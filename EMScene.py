@@ -40,12 +40,12 @@ class EMScene(object):
 
 	def Read(self, filename):
 		parentNode = self.rootEMNode
-		self.ReadRecurse(filename, {}, {}, parentNode, None)
+		self.ReadRecurse(filename, {}, {}, {}, parentNode, None)
 		self.getMeshList()
 		self.buildVirtualSourceTree(2)
 		self.getPathsToReceiver()
 
-	def ReadRecurse(self, filename = '', EMMaterials = {}, OpticalMaterials = {},  EMParentNode = None, XMLNode = None):
+	def ReadRecurse(self, filename = '', EMMaterials = {}, OpticalMaterials = {}, RadiosityMaterials = {}, EMParentNode = None, XMLNode = None):
 		if (len(filename) > 0):
 			tree = ET.parse(filename)
 			XMLNode = tree.getroot()
@@ -78,15 +78,34 @@ class EMScene(object):
 					R = float(mat.get("R"))
 					T = float(mat.get("T"))
 					EMMaterials[name] = EMMaterial(R, T)
+			if XMLNode.find('RadiosityMaterials') != None:
+				node = XMLNode.find('RadiosityMaterials')
+				for mat in node.getchildren():
+					name = mat.get("name")
+					#arguments are emission and reflectance
+					args = ["em", "p"]
+					for arg in args:
+						if mat.get(arg) == None:
+							print "Error: No %s defined in Radiosity material %s"%(arg, name)
+							return
+					[R, G, B] = [float(i) for i in mat.get("em").split()]
+					em = RGB3D(R, G, B)
+					[R, G, B] = [float(i) for i in mat.get("p").split()]
+					p = RGB3D(R, G, B)
+					RadiosityMaterials[name] = RadiosityMaterial(em, p)
+					
 		for currNode in XMLNode.getchildren():
 			EMMat = EMMaterial()
 			OpticalMat = OpticalMaterial()
+			RadiosityMat = RadiosityMaterial()
 			#Get materials (if specified...otherwise use defaults)
 			if currNode.tag in ["tri", "box", "mesh"]:
 				if currNode.get("em") != None:
 					EMMat = EMMaterials[currNode.get("em")]
 				if currNode.get("om") != None:
 					OpticalMat = OpticalMaterials[currNode.get("om")]
+				if currNode.get("rm") != None:
+					RadiosityMat = RadiosityMaterials[currNode.get("rm")]
 			#Get transformation matrix (if it exists...otherwise use identity matrix)
 			matrix = Matrix4()
 			if currNode.tag in ["tri", "box", "mesh", "node", "include"]:
@@ -148,7 +167,7 @@ class EMScene(object):
 				sceneNode = EMNode(parent = EMParentNode, transformation = matrix)
 				EMParentNode.children.append(sceneNode)
 				#Now recursively add the branch in this node
-				self.ReadRecurse('', EMMaterials, OpticalMaterials, sceneNode, currNode)
+				self.ReadRecurse('', EMMaterials, OpticalMaterials, RadiosityMaterials, sceneNode, currNode)
 			elif currNode.tag == "include":
 				#Recursively include another scene file as a branch in this tree
 				if currNode.get("filename") == None:
@@ -157,7 +176,7 @@ class EMScene(object):
 				nextfilename = currNode.get("filename")
 				sceneNode = EMNode(parent = EMParentNode, transformation = matrix)
 				EMParentNode.children.append(sceneNode)
-				self.ReadRecurse(nextfilename, {}, {}, sceneNode, None)
+				self.ReadRecurse(nextfilename, {}, {}, {}, sceneNode, None)
 			elif currNode.tag == "Source":
 				if currNode.get("pos") == None:
 					print "Error: No position defined for EM Source"
