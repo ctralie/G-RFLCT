@@ -18,13 +18,14 @@ class EMNode(object):
 	#If mesh is "None" then this node is a transformation node that takes us
 	#one level further down in the tree
 	#If 
-	def __init__(self, parent = None, mesh = None, transformation = Matrix4(), EMMat = EMMaterial(), OpticalMat = OpticalMaterial()):
+	def __init__(self, parent = None, mesh = None, transformation = Matrix4(), EMMat = EMMaterial(), OpticalMat = OpticalMaterial(), RadiosityMat = RadiosityMaterial()):
 		self.parent = parent
 		self.mesh = mesh
 		self.children = []
 		self.transformation = transformation
 		self.EMMat = EMMat
 		self.OpticalMat = OpticalMat
+		self.RadiosityMat = RadiosityMat
 		#TODO: Add bounding boxes
 
 class EMScene(object):
@@ -38,12 +39,16 @@ class EMScene(object):
 		self.pathAttens = [] #Path attenuations from bouncing
 		self.rays = [] #For debugging
 
-	def Read(self, filename):
+	#If buildImages is true, construct all of the virtual sources and extract
+	#paths from source to receiver
+	#If buildImages is false, simply load the geometry specified in the file
+	def Read(self, filename, buildImages = True):
 		parentNode = self.rootEMNode
 		self.ReadRecurse(filename, {}, {}, {}, parentNode, None)
 		self.getMeshList()
-		self.buildVirtualSourceTree(2)
-		self.getPathsToReceiver()
+		if buildImages:
+			self.buildVirtualSourceTree(2)
+			self.getPathsToReceiver()
 
 	def ReadRecurse(self, filename = '', EMMaterials = {}, OpticalMaterials = {}, RadiosityMaterials = {}, EMParentNode = None, XMLNode = None):
 		if (len(filename) > 0):
@@ -132,7 +137,7 @@ class EMScene(object):
 				mesh = PolyMesh()
 				[V0, V1, V2] = [mesh.addVertex(P0), mesh.addVertex(P1), mesh.addVertex(P2)]
 				mesh.addFace([V0, V1, V2])
-				sceneNode = EMNode(EMParentNode, mesh, matrix, EMMat, OpticalMat)
+				sceneNode = EMNode(EMParentNode, mesh, matrix, EMMat, OpticalMat, RadiosityMat)
 				EMParentNode.children.append(sceneNode)
 			elif currNode.tag == "box":
 				args = ["length", "width", "height"]
@@ -144,12 +149,15 @@ class EMScene(object):
 				W = float(currNode.get("width")) #Width in x
 				H = float(currNode.get("height")) #Height in y
 				C = Point3D(0, 0, 0)
+				stepSize = -1
 				#Center is an optional argument
 				if currNode.get("center") != None:
 					CPoints = [float(i) for i in currNode.get("center").split()] #Center of box
 					C = Point3D(CPoints[0], CPoints[1], CPoints[2])
-				mesh = getBoxMesh(L, W, H, C)
-				sceneNode = EMNode(EMParentNode, mesh, matrix, EMMat, OpticalMat)
+				if currNode.get("stepSize") != None:
+					stepSize = float(currNode.get("stepSize"))
+				mesh = getBoxMesh(L, W, H, C, stepSize)
+				sceneNode = EMNode(EMParentNode, mesh, matrix, EMMat, OpticalMat, RadiosityMat)
 				EMParentNode.children.append(sceneNode)			
 			elif currNode.tag == "mesh":
 				args = ["filename"]
@@ -160,7 +168,7 @@ class EMScene(object):
 				meshfilename = currNode.get("filename")
 				mesh = PolyMesh()
 				mesh.loadFile(meshfilename)
-				sceneNode = EMNode(EMParentNode, mesh, matrix, EMMat, OpticalMat)
+				sceneNode = EMNode(EMParentNode, mesh, matrix, EMMat, OpticalMat, RadiosityMat)
 				EMParentNode.children.append(sceneNode)
 			elif currNode.tag == "node":
 				#This is a transformation node in the graph

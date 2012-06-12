@@ -5,6 +5,8 @@ from PolyMesh import *
 class RGB3D(object):
 	def __init__(self, R = 1.0, G = 1.0, B = 1.0, A = 0.0):
 		[self.R, self.G, self.B, self.A] = [R, G, B, A]
+	def clone(self):
+		return RGB3D(self.R, self.G, self.B, self.A)
 
 class OpticalMaterial(object):
 	def __init__(self, ka = RGB3D(0.2, 0.2, 0.2), kd = RGB3D(0.5, 0.5, 0.5), ks = RGB3D(0.5, 0.5, 0.5), kt = RGB3D(0.0, 0.0, 0.0), emission = RGB3D(0.0, 0.0, 0.0)):
@@ -25,8 +27,8 @@ class RadiosityMaterial(object):
 	#This function is important for when the material gets subdivided
 	def clone(self):
 		ret = RadiosityMaterial(self.em, self.p)
-		ret.incident = self.incident
-		ret.excident = self.excident
+		ret.incident = self.incident.clone()
+		ret.excident = self.excident.clone()
 
 #fP0 is the apex of the frustum
 #frustPoints are the points that define the frustum face 

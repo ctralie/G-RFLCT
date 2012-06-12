@@ -110,11 +110,12 @@ class MeshFace(object):
 		ret = ret*(1.0/float(len(verts)))
 		return ret
 	
-	def drawFilled(self):
+	def drawFilled(self, drawNormal = True):
 		glBegin(GL_POLYGON)
-		normal = self.getNormal()
-		if isinstance(normal, Vector3D):
-			glNormal3f(normal.x, normal.y, normal.z)
+		if drawNormal:
+			normal = self.getNormal()
+			if isinstance(normal, Vector3D):
+				glNormal3f(normal.x, normal.y, normal.z)
 		verts = self.getVertices()
 		for v in verts:
 			P = v.pos
