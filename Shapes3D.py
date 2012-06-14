@@ -32,6 +32,9 @@ class BBox3D(object):
 		if P.y > self.ymax: self.ymax = P.y
 		if P.z < self.zmin: self.zmin = P.z
 		if P.z > self.zmax: self.zmax = P.z
+	
+	def __str__(self):
+		return "xmin = %g, xmax = %g, ymin = %g, ymax = %g, zmin = %g, zmax = %g"%(self.xmin, self.xmax, self.ymin, self.ymax, self.zmin, self.zmax)
 
 class Circle3D(object):
 	#center is a point

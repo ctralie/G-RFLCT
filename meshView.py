@@ -23,6 +23,7 @@ class Viewer(object):
 		#Camera state variables
 		self.mesh = PolyMesh()
 		self.mesh.loadFile(filename)
+		self.meshBBox = self.mesh.getBBox()
 		#self.mesh = getBoxMesh(1, 2, 1, Point3D(1, 100, 1), 0.55)
 		#print self.mesh
 		#self.mesh.truncate(0.2)
@@ -46,7 +47,11 @@ class Viewer(object):
 		#Set up projection matrix
 		glMatrixMode(GL_PROJECTION)
 		glLoadIdentity()
-		gluPerspective(180.0*self.camera.yfov/M_PI, float(self.GLUTwindow_width)/self.GLUTwindow_height, 0.01, 100.0)
+		farDist = (self.camera.eye - self.meshBBox.getCenter()).Length()*2
+		#This is to make sure we can see on the inside
+		farDist = max(farDist, self.meshBBox.getDiagLength())
+		nearDist = farDist/10000.0
+		gluPerspective(180.0*self.camera.yfov/M_PI, float(self.GLUTwindow_width)/self.GLUTwindow_height, nearDist, farDist)
 		
 		#Set up modelview matrix
 		self.camera.gotoCameraFrame()	
@@ -89,6 +94,8 @@ class Viewer(object):
 		elif key in ['r', 'R']:
 			self.mesh.splitFaces()
 			print self.mesh
+		elif key in ['q', 'Q']:
+			sys.exit()
 		glutPostRedisplay()
 	
 	def GLUTSpecial(self, key, x, y):

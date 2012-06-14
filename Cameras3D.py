@@ -146,7 +146,7 @@ class MousePolarCamera(object):
 		dx = length*dx / float(self.pixWidth)
 		dy = length*dy / float(self.pixHeight)
 		r = self.towards % self.up
-		self.center = self.center + dx*r + dy*self.up
+		self.center = self.center - dx*r - dy*self.up
 		self.updateVecsFromPolar()
 
 	def __str__(self):
