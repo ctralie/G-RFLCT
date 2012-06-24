@@ -14,6 +14,16 @@ SHOWIMAGES = False
 DRAWPATHS = False
 
 class Viewer(object):
+	def updateCameraVars(self):
+		self.yfov = self.camera.yfov
+		self.xfov = self.yfov*float(self.GLUTwindow_width)/float(self.GLUTwindow_height)
+		self.nearDist = 0.01
+		self.farDist = 100.0
+		self.xScale = math.tan(self.xfov/2.0)
+		self.yScale = math.tan(self.yfov/2.0)
+		self.cameraw = self.xScale*self.nearDist
+		self.camerah = self.yScale*self.nearDist
+
 	def __init__(self, filename):
 		#GLUT State variables
 		self.GLUTwindow_height = 800
@@ -26,7 +36,10 @@ class Viewer(object):
 		self.drawVerts = 0
 		self.drawNormals = 0
 		
-		#Camera state variables
+		#Camera and projection state variables
+		self.camera = MouseSphericalCamera(self.GLUTwindow_width, self.GLUTwindow_height)
+		self.updateCameraVars()
+		
 		self.scene = EMScene()
 		self.scene.Read(filename)
 		#scene = self.scene
@@ -43,7 +56,6 @@ class Viewer(object):
 		#response = scene.getSteadyStateSinusoid(915, 40, 10)
 		#print "times = %s; signal = %s"%(response[0], response[1])
 		
-		self.camera = MouseSphericalCamera(self.GLUTwindow_width, self.GLUTwindow_height)
 		random.seed()
 		self.rayPoints = []
 		self.rayNormals = []
@@ -56,13 +68,16 @@ class Viewer(object):
 		self.GLUTwindow_height = h
 		self.camera.pixWidth = w
 		self.camera.pixHeight = h
+		self.updateCameraVars()
 		glutPostRedisplay()
 
 	def GLUTRedraw(self):
 		#Set up projection matrix
 		glMatrixMode(GL_PROJECTION)
 		glLoadIdentity()
-		gluPerspective(180.0*self.camera.yfov/math.pi, float(self.GLUTwindow_width)/self.GLUTwindow_height, 0.01, 100.0)
+		#gluPerspective(180.0*self.camera.yfov/math.pi, float(self.GLUTwindow_width)/self.GLUTwindow_height, 0.01, 100.0)
+		#glFrustum(-cameraw, cameraw, -camerah, camerah, near, far)
+		glFrustum(-self.cameraw, self.cameraw, -self.camerah, self.camerah, self.nearDist, self.farDist)
 		
 		#Set up modelview matrix
 		self.camera.gotoCameraFrame()	
