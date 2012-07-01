@@ -104,7 +104,7 @@ class EMScene(object):
 			OpticalMat = OpticalMaterial()
 			RadiosityMat = RadiosityMaterial()
 			#Get materials (if specified...otherwise use defaults)
-			if currNode.tag in ["tri", "box", "mesh"]:
+			if currNode.tag in ["tri", "box", "rect", "mesh"]:
 				if currNode.get("em") != None:
 					EMMat = EMMaterials[currNode.get("em")]
 				if currNode.get("om") != None:
@@ -157,8 +157,31 @@ class EMScene(object):
 				if currNode.get("stepSize") != None:
 					stepSize = float(currNode.get("stepSize"))
 				mesh = getBoxMesh(L, W, H, C, stepSize)
+				if currNode.get("flipNormals") != None:
+					if int(currNode.get("flipNormals")) == 1:
+						mesh.flipNormals()
 				sceneNode = EMNode(EMParentNode, mesh, matrix, EMMat, OpticalMat, RadiosityMat)
-				EMParentNode.children.append(sceneNode)			
+				EMParentNode.children.append(sceneNode)
+			elif currNode.tag == "rect":
+				args = ["P0", "P1", "P2", "P3"]
+				for arg in args:
+					if currNode.get(arg) == None:
+						print "Error: No %s defined in rect"%(arg)
+						return
+				P0args = [float(i) for i in currNode.get("P0").split()]
+				P1args = [float(i) for i in currNode.get("P1").split()]
+				P2args = [float(i) for i in currNode.get("P2").split()]
+				P3args = [float(i) for i in currNode.get("P3").split()]
+				P0 = Point3D(P0args[0], P0args[1], P0args[2])
+				P1 = Point3D(P1args[0], P1args[1], P1args[2])
+				P2 = Point3D(P2args[0], P2args[1], P2args[2])
+				P3 = Point3D(P3args[0], P3args[1], P3args[2])
+				stepSize = -1
+				if currNode.get("stepSize") != None:
+					stepSize = float(currNode.get("stepSize"))
+				mesh = getRectMesh(P0, P1, P2, P3, stepSize)
+				sceneNode = EMNode(EMParentNode, mesh, matrix, EMMat, OpticalMat, RadiosityMat)
+				EMParentNode.children.append(sceneNode)
 			elif currNode.tag == "mesh":
 				args = ["filename"]
 				for arg in args:
@@ -168,6 +191,9 @@ class EMScene(object):
 				meshfilename = currNode.get("filename")
 				mesh = PolyMesh()
 				mesh.loadFile(meshfilename)
+				if currNode.get("flipNormals") != None:
+					if int(currNode.get("flipNormals")) == 1:
+						mesh.flipNormals()
 				sceneNode = EMNode(EMParentNode, mesh, matrix, EMMat, OpticalMat, RadiosityMat)
 				EMParentNode.children.append(sceneNode)
 			elif currNode.tag == "node":
@@ -198,7 +224,7 @@ class EMScene(object):
 				coords = [float(i) for i in currNode.get("pos").split()]
 				self.Receiver = Point3D(coords[0], coords[1], coords[2])
 			else:
-				if not (currNode.tag in ["EMMaterials", "OpticalMaterials"]):
+				if not (currNode.tag in ["EMMaterials", "OpticalMaterials", "RadiosityMaterials"]):
 					print "Unrecognized tag %s"%currNode.tag
 
 	#Get a list of meshes in the scene

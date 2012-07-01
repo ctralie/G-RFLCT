@@ -72,6 +72,16 @@ class MeshFace(object):
 		self.ID = ID
 		self.edges = [] #Store edges in CCW order
 		self.startV = 0 #Vertex that starts it off
+		#Cache area, normal, and centroid
+		self.area = None
+		self.normal = None
+		self.centroid = None
+
+	def flipNormal(self):
+		#Reverse the specification of the edges to make the normal
+		#point in the opposite direction
+		self.edges.reverse()
+		self.normal = None
 
 	#Return a list of vertices on the face in CCW order
 	def getVertices(self):
@@ -83,32 +93,38 @@ class MeshFace(object):
 		return ret
 	
 	def getNormal(self):
-		verts = [v.pos for v in self.getVertices()]
-		return getFaceNormal(verts)
+		if not self.normal:
+			verts = [v.pos for v in self.getVertices()]
+			self.normal = getFaceNormal(verts)
+		return self.normal
 	
 	def getArea(self):
-		verts = self.getVertices()
-		if len(verts) < 3:
-			return 0.0
-		v1 = verts[1].pos - verts[0].pos
-		v2 = verts[1].pos - verts[0].pos
-		area = 0.0
-		#Triangulate and add area of each triangle
-		for i in range(2, len(verts)):
-			v1 = v2
-			v2 = verts[i].pos - verts[0].pos
-			area = area + 0.5*(v1%v2).Length()
-		return area
+		if not self.area:
+			verts = self.getVertices()
+			if len(verts) < 3:
+				return 0.0
+			v1 = verts[1].pos - verts[0].pos
+			v2 = verts[1].pos - verts[0].pos
+			area = 0.0
+			#Triangulate and add area of each triangle
+			for i in range(2, len(verts)):
+				v1 = v2
+				v2 = verts[i].pos - verts[0].pos
+				area = area + 0.5*(v1%v2).Length()
+			self.area = area
+		return self.area
 	
 	def getCentroid(self):
-		ret = Point3D(0, 0, 0)
-		verts = self.getVertices()
-		if len(verts) == 0:
-			return ret
-		for v in verts:
-			ret = ret + v.pos
-		ret = ret*(1.0/float(len(verts)))
-		return ret
+		if not self.centroid:
+			ret = Point3D(0, 0, 0)
+			verts = self.getVertices()
+			if len(verts) == 0:
+				return ret
+			for v in verts:
+				ret = ret + v.pos
+			ret = ret*(1.0/float(len(verts)))
+			self.centroid = ret
+		return self.centroid
 	
 	def drawFilled(self, drawNormal = True):
 		glBegin(GL_POLYGON)
@@ -295,7 +311,7 @@ class PolyMesh(object):
 		self.vertices.pop()
 	
 	#############################################################
-	####          SUBDIVISON AND REMESHING METHODS          #####
+	####    TOPOLOGY SUBDIVISION AND REMESHING METHODS      #####
 	#############################################################
 	
 	#Split every face into K+1 faces by creating a new vertex
@@ -417,6 +433,10 @@ class PolyMesh(object):
 				thisV = f.edges[i].vertexAcross(thisV)
 			if len(newFace) > 0:
 				self.addFace(newFace)
+	
+	def flipNormals(self):
+		for f in self.faces:
+			f.flipNormal()
 
 	#############################################################
 	####                 GEOMETRY METHODS                   #####
@@ -667,6 +687,8 @@ def makeBoxEdge(mesh, v1, v2, stepSize):
 	frac = stepSize/direc.Length()
 	#Round to the nearest integer number of tiles
 	N = int(math.floor(1.0/frac+0.5))
+	if N == 0:
+		N = 1
 	frac = 1.0/float(N)
 	for i in range(1, N):
 		newVert = mesh.addVertex(v1.pos+direc*frac*i)
@@ -726,6 +748,19 @@ def getBoxMesh(L = 1.0, W = 1.0, H = 1.0, C = Point3D(0, 0, 0), stepSize = -1):
 	addFaceTiles(mesh, stepSize, edgesRev[2], edges[6], edgesRev[7], edges[8])
 	#Bottom Face
 	addFaceTiles(mesh, stepSize, edges[11], edges[4], edges[0], edges[9])
+	return mesh
+
+def getRectMesh(P0, P1, P2, P3, stepSize = -1):
+	mesh = PolyMesh()
+	endpoints = [P0, P1, P2, P3]
+	for i in range(0, len(endpoints)):
+		endpoints[i] = mesh.addVertex(endpoints[i])
+	edgeIndices = [[0, 1], [2, 1], [3, 2], [3, 0]]
+	edges = []
+	for edgePointers in edgeIndices:
+		[v1, v2] = [endpoints[edgePointers[0]], endpoints[edgePointers[1]]]
+		edges.append(makeBoxEdge(mesh, v1, v2, stepSize))
+	addFaceTiles(mesh, stepSize, edges[0], edges[1], edges[2], edges[3])
 	return mesh
 
 if __name__ == '__main__':

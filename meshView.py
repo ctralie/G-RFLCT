@@ -50,7 +50,7 @@ class Viewer(object):
 		farDist = (self.camera.eye - self.meshBBox.getCenter()).Length()*2
 		#This is to make sure we can see on the inside
 		farDist = max(farDist, self.meshBBox.getDiagLength())
-		nearDist = farDist/10000.0
+		nearDist = farDist/50.0
 		gluPerspective(180.0*self.camera.yfov/M_PI, float(self.GLUTwindow_width)/self.GLUTwindow_height, nearDist, farDist)
 		
 		#Set up modelview matrix
@@ -94,6 +94,18 @@ class Viewer(object):
 		elif key in ['r', 'R']:
 			self.mesh.splitFaces()
 			print self.mesh
+		elif key in ['d', 'D']:
+			#Print depth image
+			width = self.GLUTwindow_width
+			height = self.GLUTwindow_height
+			pixels = glReadPixelsb(0, 0, width, height, GL_DEPTH_COMPONENT, GL_FLOAT)
+			fout = open('getDepth.m', 'w')
+			fout.write("depth = [")
+			for y in range(0, height):
+				for x in range(0, width):
+					fout.write("%s "%pixels[height-y-1][x])
+				fout.write(";\n")
+			fout.write("];")
 		elif key in ['q', 'Q']:
 			sys.exit()
 		glutPostRedisplay()
