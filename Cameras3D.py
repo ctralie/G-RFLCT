@@ -5,6 +5,14 @@ from Primitives3D import *
 from Shapes3D import *
 import math
 
+def getCameraMatrix(t, u, r, P):
+	rotMat = Matrix4([r.x, u.x, -t.x, 0, r.y, u.y, -t.y, 0, r.z, u.z, -t.z, 0, 0, 0, 0, 1])
+	rotMat = rotMat.Inverse()
+	transMat = Matrix4([1, 0, 0, -P.x, 0, 1, 0, -P.y, 0, 0, 1, -P.z, 0, 0, 0, 1])
+	#Translate first then rotate
+	mat = rotMat*transMat
+	return mat
+
 #This function pushes a matrix onto the stack that puts everything
 #in the frame of a camera which is centered at position "P",
 #is pointing towards "t", and has vector "r" to the right
