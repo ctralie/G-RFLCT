@@ -51,23 +51,17 @@ def CCW2D(A, B, C):
 #Each beam should have a coordinate system and a near distance
 #The coordinate system should orient the "towards" direction
 #perpendicular to the image plane of the beam
-#"face" is either a MeshFace or a list of points on a frustum
-#If it is a list of points on a frustum, then it is one of the
-#initial cast beams and has not reflected across a face yet
-#In that case the default neardist can be used
+#"face" points to the MeshFace associated with the beam, if there is one
+#Otherwise, the beam it is one of the initial cast beams and has not 
+#reflected across a face yet. In that case the default neardist can be used
 #Other member variables: 
 #mvMatrix: Modelview matrix for putting in the coordinate system of a beam
 #frustPoints: Points of the frustum on the 2D image plane
 class Beam3D(object):
-	def __init__(self, origin, face):
+	def __init__(self, origin, frustVertices, face = None):
 		self.origin = origin
 		self.neardist = 0.01
-		frustVertices = face
-		if isinstance(face, MeshFace):
-			self.face = face
-			frustVertices = [v.pos for v in face.getVertices()]
-		else:
-			self.face = None
+		self.face = face
 		if len(frustVertices) < 3:
 			print "ERROR: Less than 3 frustVertices on beam projection face"
 			return
@@ -85,7 +79,7 @@ class Beam3D(object):
 		#front of the beam are -z)
 		self.mvMatrix = getCameraMatrix(self.towards, self.up, self.right, self.origin)
 		#Now calculate the near distance if the beam is associated with a face
-		if isinstance(face, MeshFace):
+		if face:
 			P = self.mvMatrix*frustVertices[0]
 			self.neardist = -P.z
 		#Now map the frustum points to 2D image plane coordinates
@@ -178,13 +172,20 @@ class Beam3D(object):
 							print "2: Clip intersection not found: %s, %s, %s, %s"%(self.mvMatrix.Inverse()*clipEdge[0], self.mvMatrix.Inverse()*clipEdge[1], self.mvMatrix.Inverse()*S, self.mvMatrix.Inverse()*E)
 						outputList.append(intersection)
 				S = E
-		for v in outputList:
-			print self.mvMatrix.Inverse()*v
+		#for v in outputList:
+		#	print self.mvMatrix.Inverse()*v
 		return outputList
+	
+	def clipPolygon(self, poly):
+		ret = self.projectPolygon(poly)
+		return self.clipToFrustum(ret)
+	
+	def clipMeshFace(self, face):
+		return self.clipPolygon([v.pos for v in face.getVertices()])
 
 if __name__ == '__main__':
 	mesh = getRectMesh(Point3D(-1, -1, -1), Point3D(-1, 1, -1), Point3D(0, 1, -1), Point3D(0, -1, -1))
-	beam = Beam3D(Point3D(0, 0, 0), mesh.faces[0])
+	beam = Beam3D(Point3D(0, 0, 0), [v.pos for v in mesh.faces[0].getVertices()], mesh.faces[0])
 	#poly = [Vector3D(-3, 0, 0), Vector3D(0, 0, 1), Vector3D(2, 0, 1), Vector3D(3, 0, 0), Vector3D(7, 0, -4), Vector3D(5, 0, -5), Vector3D(3, 0, -5), Vector3D(0, 0, -3)]
 	poly = [Vector3D(-1, 0, -1), Vector3D(-0.5, 0.5, -1), Vector3D(1.5, 0.5, -1), Vector3D(2, 0, -1), Vector3D(1.5, -0.5, -1), Vector3D(0, -1, -1)]
 	poly = beam.projectPolygon(poly)
