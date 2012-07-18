@@ -90,10 +90,6 @@ class Beam3D(object):
 			self.neardist = -P.z
 		#Now map the frustum points to 2D image plane coordinates
 		self.frustPoints = self.projectPolygon(frustVertices, False)
-		#Make sure the frustum points are in counter clockwise order
-		ccw = CCW2D(self.frustPoints[0], self.frustPoints[1], self.frustPoints[2])
-		if ccw == 1:
-			self.frustPoints.reverse()
 	
 	#Project a polygon onto the beam's image plane (before clipping to frustum)
 	def projectPolygon(self, polygon, doClip = True):
@@ -132,6 +128,11 @@ class Beam3D(object):
 			clippedVerts[i].x = -self.neardist*clippedVerts[i].x/clippedVerts[i].z
 			clippedVerts[i].y = -self.neardist*clippedVerts[i].y/clippedVerts[i].z
 			clippedVerts[i].z = -self.neardist
+		#Make sure the points are in counter clockwise order
+		if len(clippedVerts) >= 3:
+			ccw = CCW2D(clippedVerts[0], clippedVerts[1], clippedVerts[2])
+			if ccw == 1:
+				clippedVerts.reverse()
 		return clippedVerts
 	
 	
@@ -153,30 +154,38 @@ class Beam3D(object):
 				#E is inside the clip edge
 				if CCW2D(clipEdge[0], clipEdge[1], E) != 1:
 					#S is not inside the clip edge
-					if not CCW2D(clipEdge[0], clipEdge[1], S):
+					if CCW2D(clipEdge[0], clipEdge[1], S) == 1:
+						#Polygon going from outside to inside
+						if CCW2D(clipEdge[0], clipEdge[1], E) != 0:
+							#Only add the intersection if E is not on the clip edge
+							#(otherwise E gets added twice)
+							line1 = Line3D(clipEdge[0], clipEdge[1]-clipEdge[0])
+							line2 = Line3D(S, E-S)
+							intersection = line1.intersectOtherLine(line2)
+							if not intersection:
+								print "1: Clip intersection not found: %s, %s, %s, %s"%(self.mvMatrix.Inverse()*clipEdge[0], self.mvMatrix.Inverse()*clipEdge[1], self.mvMatrix.Inverse()*S, self.mvMatrix.Inverse()*E)
+							outputList.append(intersection)
+					outputList.append(E)
+				elif CCW2D(clipEdge[0], clipEdge[1], S) != 1:
+					#Polygon going from inside to outside
+					if CCW2D(clipEdge[0], clipEdge[1], S) != 0:
+						#Only add intersection if S is not on the clip edge
+						#(otherwise it gets added twice since it's already been added)
 						line1 = Line3D(clipEdge[0], clipEdge[1]-clipEdge[0])
 						line2 = Line3D(S, E-S)
 						intersection = line1.intersectOtherLine(line2)
 						if not intersection:
-							print "Intersection not found: %s, %s, %s, %s"%(clipEdge[0], clipEdge[1], S, E)
+							print "2: Clip intersection not found: %s, %s, %s, %s"%(self.mvMatrix.Inverse()*clipEdge[0], self.mvMatrix.Inverse()*clipEdge[1], self.mvMatrix.Inverse()*S, self.mvMatrix.Inverse()*E)
 						outputList.append(intersection)
-					outputList.append(E)
-				elif CCW2D(clipEdge[0], clipEdge[1], S):
-					line1 = Line3D(clipEdge[0], clipEdge[1]-clipEdge[0])
-					line2 = Line3D(S, E-S)
-					intersection = line1.intersectOtherLine(line2)
-					if not intersection:
-						print "Intersection not found: %s, %s, %s, %s"%(clipEdge[0], clipEdge[1], S, E)
-					outputList.append(intersection)
 				S = E
+		for v in outputList:
+			print self.mvMatrix.Inverse()*v
 		return outputList
 
 if __name__ == '__main__':
-	mesh = getRectMesh(Point3D(-1, -1, -1), Point3D(-1, 1, -1), Point3D(1, 1, -1), Point3D(1, -1, -1))
+	mesh = getRectMesh(Point3D(-1, -1, -1), Point3D(-1, 1, -1), Point3D(0, 1, -1), Point3D(0, -1, -1))
 	beam = Beam3D(Point3D(0, 0, 0), mesh.faces[0])
 	#poly = [Vector3D(-3, 0, 0), Vector3D(0, 0, 1), Vector3D(2, 0, 1), Vector3D(3, 0, 0), Vector3D(7, 0, -4), Vector3D(5, 0, -5), Vector3D(3, 0, -5), Vector3D(0, 0, -3)]
-	poly = [Vector3D(-1, 0, -1), Vector3D(-0.5, 0.5, -1), Vector3D(1.5, 0.5, -1), Vector3D(1.5, -0.5, -1), Vector3D(0, -1, -1)]
+	poly = [Vector3D(-1, 0, -1), Vector3D(-0.5, 0.5, -1), Vector3D(1.5, 0.5, -1), Vector3D(2, 0, -1), Vector3D(1.5, -0.5, -1), Vector3D(0, -1, -1)]
 	poly = beam.projectPolygon(poly)
 	poly = beam.clipToFrustum(poly)
-	#for v in poly:
-	#	print v
