@@ -140,6 +140,8 @@ class Beam3D(object):
 	def clipToFrustum(self, polygon2D):
 		outputList = polygon2D[:]
 		for i in range(0, len(self.frustPoints)):
+			if len(outputList) == 0: #Special case: No Points left
+				break
 			clipEdge = [self.frustPoints[i], self.frustPoints[(i+1)%len(self.frustPoints)]]
 			inputList = outputList
 			outputList = []
@@ -187,6 +189,8 @@ if __name__ == '__main__':
 	mesh = getRectMesh(Point3D(-1, -1, -1), Point3D(-1, 1, -1), Point3D(0, 1, -1), Point3D(0, -1, -1))
 	beam = Beam3D(Point3D(0, 0, 0), [v.pos for v in mesh.faces[0].getVertices()], mesh.faces[0])
 	#poly = [Vector3D(-3, 0, 0), Vector3D(0, 0, 1), Vector3D(2, 0, 1), Vector3D(3, 0, 0), Vector3D(7, 0, -4), Vector3D(5, 0, -5), Vector3D(3, 0, -5), Vector3D(0, 0, -3)]
-	poly = [Vector3D(-1, 0, -1), Vector3D(-0.5, 0.5, -1), Vector3D(1.5, 0.5, -1), Vector3D(2, 0, -1), Vector3D(1.5, -0.5, -1), Vector3D(0, -1, -1)]
+	poly = [Vector3D(-1, 0, -1)]#, Vector3D(-0.5, 0.5, -1), Vector3D(1.5, 0.5, -1), Vector3D(2, 0, -1), Vector3D(1.5, -0.5, -1), Vector3D(0, -1, -1)]
+	#poly = [v+Vector3D(-100, 0, 0) for v in poly]
 	poly = beam.projectPolygon(poly)
 	poly = beam.clipToFrustum(poly)
+	print beam.mvMatrix.Inverse()*poly[0]
