@@ -10,8 +10,8 @@ from RayTraceImage import *
 from sys import argv
 import random
 
-SHOWIMAGES = False
-DRAWPATHS = False
+SHOWIMAGES = True
+DRAWPATHS = True
 
 class Viewer(object):
 	def updateCameraVars(self):

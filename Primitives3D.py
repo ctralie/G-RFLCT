@@ -1,3 +1,4 @@
+#TODO: Make EPS adaptive like in Beam3D
 EPS = 1e-7
 M_PI = 3.1415925
 import math
@@ -97,11 +98,25 @@ class Point3D(object):
 		self.y = y
 		self.z = z
 
+	def Dot(self, other):
+		return self.x*other.x + self.y*other.y + self.z*other.z
+
 	def squaredMag(self):
 		return self.x**2.0 + self.y**2.0 + self.z**2.0
 	
 	def Length(self):
 		return self.squaredMag()**0.5
+	
+	def normalize(self):
+		mag = self.squaredMag()**0.5
+		mag = float(mag)
+		if (mag > EPS):
+			self.x = self.x/mag
+			self.y = self.y/mag
+			self.z = self.z/mag
+	
+	def Normalize(self):
+		self.normalize()
 	
 	def __add__(self, other):
 		return Point3D(self.x+other.x, self.y+other.y, self.z+other.z)
@@ -296,7 +311,7 @@ class Line3D(object):
 		#print "[%g %g][t] = [%g]\n[%g %g][s]   [%g]"%(a, b, e, c, d, f)
 		detDenom = a*d - c*b
 		#Lines are parallel or skew
-		if (abs(detDenom) < EPS):
+		if detDenom == 0:
 			return None
 		detNumt = e*d - b*f
 		detNums = a*f - c*e

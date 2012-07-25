@@ -2,9 +2,30 @@ from Primitives3D import *
 from Graphics3D import *
 from Shapes3D import *
 from PolyMesh import *
+from Beam3D import *
 from OpenGL.GL import *
 import math
 from lxml import etree as ET
+
+
+#fP0 is the apex of the frustum
+#frustPoints are the points that define the frustum face 
+#facePoints are the points that define the face that's being checked
+#for being inside the frustum
+#alwaysPass makes this always return true (disables pruning)
+def meshFaceInFrustum(fP0, frustPoints, facePoints, alwaysPass = False):
+	if alwaysPass:
+		return True
+	if len(frustPoints) < 3:
+		print "Error: Less than three points in face defining frustum"
+		return False
+	if len(facePoints) < 3:
+		print "Error: Less than three points in face that's being checked against frustum"
+		return False
+	beam = Beam3D(fP0, frustPoints)
+	if len(beam.clipPolygon(facePoints)) > 0:
+		return True
+	return False
 
 class EMMaterial(object):
 	def __init__(self, R = 1.0, T = 0.0):
@@ -17,7 +38,6 @@ class EMNode(object):
 	#it probably won't have an effect on any RF simulations
 	#If mesh is "None" then this node is a transformation node that takes us
 	#one level further down in the tree
-	#If 
 	def __init__(self, parent = None, mesh = None, transformation = Matrix4(), EMMat = EMMaterial(), OpticalMat = OpticalMaterial(), RadiosityMat = RadiosityMaterial()):
 		self.parent = parent
 		self.mesh = mesh
@@ -47,7 +67,7 @@ class EMScene(object):
 		self.ReadRecurse(filename, {}, {}, {}, parentNode, None)
 		self.getMeshList()
 		if buildImages:
-			self.buildVirtualSourceTree(2)
+			self.buildVirtualSourceTree(3)
 			self.getPathsToReceiver()
 
 	def ReadRecurse(self, filename = '', EMMaterials = {}, OpticalMaterials = {}, RadiosityMaterials = {}, EMParentNode = None, XMLNode = None):
@@ -310,8 +330,10 @@ class EMScene(object):
 		if level == maxLevel: #The maximum number of bounces allowed has been reached
 			return
 		#Try to mirror this source around every face in the scene
+		frustPoints = []
+		if level > 0:
+			frustPoints = [P.pos for P in currNode.meshFace.getVertices()]
 		for m in self.meshes:
-			EMNode = m.EMNode
 			for f in m.faces:
 				if f != currNode.meshFace:
 					fP0 = currNode.pos
@@ -319,7 +341,6 @@ class EMScene(object):
 					if level > 0: #Do pruning test to avoid making
 						#virtual sources that cannot be reached from this one
 						#meshFaceInFrustum(fP0, frustPoints, facePoints)
-						frustPoints = [P.pos for P in currNode.meshFace.getVertices()]
 						if not meshFaceInFrustum(fP0, frustPoints, facePoints):
 							continue
 					#Tests passed: need to make a virtual image here
@@ -330,10 +351,13 @@ class EMScene(object):
 					perpFaceV = faceNormal.proj(dV)
 					parFaceV = faceNormal.projPerp(dV)
 					mirrorP0 = facePoints[0] + parFaceV - perpFaceV
-					newSourceNode = EMVSourceNode(mirrorP0, currNode, f, m.EMNode)
-					currNode.children.append(newSourceNode)
-					#Now recursively make the virtual images for this new image
-					self.buildVirtualSourceTreeRecurse(newSourceNode, level+1, maxLevel)
+					if perpFaceV.squaredMag() > EPS:
+						#Make sure that this is not an "impossible" image
+						#(i.e. the image is not the same after reflection)
+						newSourceNode = EMVSourceNode(mirrorP0, currNode, f, m.EMNode)
+						currNode.children.append(newSourceNode)
+						#Now recursively make the virtual images for this new image
+						self.buildVirtualSourceTreeRecurse(newSourceNode, level+1, maxLevel)
 
 	def buildVirtualSourceTree(self, maxLevel):
 		if not isinstance(self.Source, Point3D):

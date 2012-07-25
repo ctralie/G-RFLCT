@@ -8,10 +8,15 @@ import math
 #TODO: Update image sources pruning to make use of this class
 #Get the epsilon to be used for numerical precision
 def getEPS(A, B, C):
+	return 1e-7
 	avgdx = (abs(A.x-B.x) + abs(A.x-C.x) + abs(B.x-C.x))/3.0
 	avgdy = (abs(A.y-B.y) + abs(A.y-C.y) + abs(B.y-C.y))/3.0
 	avgdz = (abs(A.z-B.z) + abs(A.z-C.z) + abs(B.z-C.z))/3.0
-	return min(min(avgdx, avgdy), avgdz)*1e-7
+	mins = [avgdx, avgdy, avgdz]
+	mins = [x for x in mins if x > 0]
+	if len(mins) > 0:
+		return mins[0]*1e-4
+	return 1e-7
 
 def PointsEqual2D(P1, P2, eps):
 	if (abs(P1.x-P2.x) < eps and abs(P1.y-P2.y) < eps):
@@ -59,6 +64,7 @@ def CCW2D(A, B, C):
 #frustPoints: Points of the frustum on the 2D image plane
 class Beam3D(object):
 	def __init__(self, origin, frustVertices, face = None):
+		self.frustVertices = frustVertices
 		self.origin = origin
 		self.neardist = 0.01
 		self.face = face
@@ -90,8 +96,9 @@ class Beam3D(object):
 		#First transform all points into the beam's field of view
 		mvVerts = [self.mvMatrix*v for v in polygon]
 		#Now clip the polygon to the near plane
-		clippedVerts = []
+		clippedVerts = mvVerts
 		if doClip:
+			clippedVerts = []
 			for i in range(0, len(mvVerts)):
 				v1 = mvVerts[i]
 				v2 = mvVerts[(i+1)%len(mvVerts)]
@@ -112,13 +119,17 @@ class Beam3D(object):
 					#Just add the left one
 					clippedVerts.append(v1)
 				#Otherwise two vertices are behind
-		else:
-			clippedVerts = mvVerts
 		#FOR DEBUGGING
 		#for v in clippedVerts:
 		#	print self.mvMatrix.Inverse()*v
 		#Now do the perspective projection
 		for i in range(0, len(clippedVerts)):
+			if clippedVerts[i].z == 0:
+				if doClip:
+					print "ERROR: Near clipping did not work properly"
+				else:
+					print "WARNING: Beam focus point is in the plane of the defining face!!"
+					clippedVerts[i].z = 1e-5
 			clippedVerts[i].x = -self.neardist*clippedVerts[i].x/clippedVerts[i].z
 			clippedVerts[i].y = -self.neardist*clippedVerts[i].y/clippedVerts[i].z
 			clippedVerts[i].z = -self.neardist
@@ -147,32 +158,40 @@ class Beam3D(object):
 			outputList = []
 			S = inputList[-1]
 			for E in inputList:
-				#E is inside the clip edge
-				if CCW2D(clipEdge[0], clipEdge[1], E) != 1:
-					#S is not inside the clip edge
-					if CCW2D(clipEdge[0], clipEdge[1], S) == 1:
+				CCWS = CCW2D(clipEdge[0], clipEdge[1], S)
+				CCWE = CCW2D(clipEdge[0], clipEdge[1], E)
+				if CCWE != 1: #E is inside the clip edge
+					if CCWS == 1: #S is not inside the clip edge
 						#Polygon going from outside to inside
-						if CCW2D(clipEdge[0], clipEdge[1], E) != 0:
+						if CCWE != 0:
 							#Only add the intersection if E is not on the clip edge
 							#(otherwise E gets added twice)
 							line1 = Line3D(clipEdge[0], clipEdge[1]-clipEdge[0])
 							line2 = Line3D(S, E-S)
 							intersection = line1.intersectOtherLine(line2)
 							if not intersection:
-								print "1: Clip intersection not found: %s, %s, %s, %s"%(self.mvMatrix.Inverse()*clipEdge[0], self.mvMatrix.Inverse()*clipEdge[1], self.mvMatrix.Inverse()*S, self.mvMatrix.Inverse()*E)
-							outputList.append(intersection)
+								print "CCWE = %i, CCWS = %i"%(CCWE, CCWS)
+								print "EPS_S = %g"%getEPS(clipEdge[0], clipEdge[1], S)
+								print "EPS_E = %g"%getEPS(clipEdge[0], clipEdge[1], E)
+								print "1: Clip intersection not found: ClipEdge = [%s, %s], S = %s, E = %s"%(self.mvMatrix.Inverse()*clipEdge[0], self.mvMatrix.Inverse()*clipEdge[1], self.mvMatrix.Inverse()*S, self.mvMatrix.Inverse()*E)
+							else:
+								outputList.append(intersection)
 					outputList.append(E)
-				elif CCW2D(clipEdge[0], clipEdge[1], S) != 1:
+				elif CCWS != 1:
 					#Polygon going from inside to outside
-					if CCW2D(clipEdge[0], clipEdge[1], S) != 0:
+					if CCWS != 0:
 						#Only add intersection if S is not on the clip edge
 						#(otherwise it gets added twice since it's already been added)
 						line1 = Line3D(clipEdge[0], clipEdge[1]-clipEdge[0])
 						line2 = Line3D(S, E-S)
 						intersection = line1.intersectOtherLine(line2)
 						if not intersection:
-							print "2: Clip intersection not found: %s, %s, %s, %s"%(self.mvMatrix.Inverse()*clipEdge[0], self.mvMatrix.Inverse()*clipEdge[1], self.mvMatrix.Inverse()*S, self.mvMatrix.Inverse()*E)
-						outputList.append(intersection)
+							print "CCWE = %i, CCWS = %i"%(CCWE, CCWS)
+							print "EPS_S = %g"%getEPS(clipEdge[0], clipEdge[1], S)
+							print "EPS_E = %g"%getEPS(clipEdge[0], clipEdge[1], E)
+							print "2: Clip intersection not found: ClipEdge = [%s, %s], S = %s, E = %s"%(self.mvMatrix.Inverse()*clipEdge[0], self.mvMatrix.Inverse()*clipEdge[1], self.mvMatrix.Inverse()*S, self.mvMatrix.Inverse()*E)
+						else:
+							outputList.append(intersection)
 				S = E
 		#for v in outputList:
 		#	print self.mvMatrix.Inverse()*v
@@ -184,13 +203,28 @@ class Beam3D(object):
 	
 	def clipMeshFace(self, face):
 		return self.clipPolygon([v.pos for v in face.getVertices()])
+	
+	def __str__(self):
+		ret = "Beam3D: origin = %s, neardist = %s, Points = "%(self.origin, self.neardist)
+		for v in self.frustVertices:
+			ret = ret + "%s "%v
+		return ret
 
-if __name__ == '__main__':
+if __name__== '__main__':
+	origin =  Point3D(-2.5, 2.5, -2)
+	frustPoints = [Point3D(1.25, 2.5, 2.5), Point3D(1.25, 2.5, -2.5), Point3D(3.75, 2.5, -2.5), Point3D(3.75, 2.5, 2.5)]
+	points = [Point3D(-4.5, -3.75, 0), Point3D(0.5, -3.75, 0), Point3D(0.5, -6.25, 0), Point3D(-4.5, -6.25, 0)]
+	beam = Beam3D(origin, frustPoints)
+	beam.clipPolygon(points)
+
+if __name__ == '__main__old':
 	mesh = getRectMesh(Point3D(-1, -1, -1), Point3D(-1, 1, -1), Point3D(0, 1, -1), Point3D(0, -1, -1))
 	beam = Beam3D(Point3D(0, 0, 0), [v.pos for v in mesh.faces[0].getVertices()], mesh.faces[0])
 	#poly = [Vector3D(-3, 0, 0), Vector3D(0, 0, 1), Vector3D(2, 0, 1), Vector3D(3, 0, 0), Vector3D(7, 0, -4), Vector3D(5, 0, -5), Vector3D(3, 0, -5), Vector3D(0, 0, -3)]
-	poly = [Vector3D(-1, 0, -1)]#, Vector3D(-0.5, 0.5, -1), Vector3D(1.5, 0.5, -1), Vector3D(2, 0, -1), Vector3D(1.5, -0.5, -1), Vector3D(0, -1, -1)]
+	#poly = [Vector3D(-1, 0, -1)]#, Vector3D(-0.5, 0.5, -1), Vector3D(1.5, 0.5, -1), Vector3D(2, 0, -1), Vector3D(1.5, -0.5, -1), Vector3D(0, -1, -1)]
 	#poly = [v+Vector3D(-100, 0, 0) for v in poly]
+	poly = [Point3D(-1, -1, -1), Point3D(-1, 1, -1), Point3D(0, 1, -1), Point3D(0, -1, -2)]
 	poly = beam.projectPolygon(poly)
 	poly = beam.clipToFrustum(poly)
-	print beam.mvMatrix.Inverse()*poly[0]
+	for v in poly:
+		print beam.mvMatrix.Inverse()*v
