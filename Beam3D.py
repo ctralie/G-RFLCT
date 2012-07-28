@@ -204,6 +204,59 @@ class Beam3D(object):
 	def clipMeshFace(self, face):
 		return self.clipPolygon([v.pos for v in face.getVertices()])
 	
+	#Purpose: Return the largest face that is completely unobstructed from
+	#the point of view of this beam
+	#Faces contains a list of MeshFace objects to be clipped against this beam
+	#Retunrs a tuple (clipped vertices, face object)
+	def findFaceInFront(self, faces):
+		validFaces = []
+		#First find the faces that are actually within the beam
+		for face in faces:
+			clipped = self.clipMeshFace(face)
+			if len(clipped) > 0:
+				#Only consider the face if it is within the beam
+				validFaces.append((clipped, face))
+		faceInFront = None
+		faceArea = 0.0
+		for i in range(0, len(validFaces)):
+			face = validFaces[i]
+			#Put the clipped coordinates of this face back into world
+			#coordinates and put them back on their corresponding
+			#face before comparing them
+			vertices = [self.mvMatrix.Inverse()*v for v in face[0]]
+			for i in range(0, len(vertices)):
+				ray = Ray3D(self.origin, vertices[i] - self.origin)
+				v = ray.intersectMeshFace(face[1])
+				if not v:
+					print "ERROR: Unable to put face back into world coordinates"
+				else:
+					vertices[i] = v[1]
+			#Check "face" against the plane of every other valid face
+			for j in range(0, len(validFaces)):
+				if i == j:
+					continue
+				otherFace = validFaces[j]
+				normal = otherFace[1].getNormal()
+				P0 = otherFace[1].starV.pos
+				dV = P0 - self.origin
+				#Make sure plane normal is pointing in the direction of this beam
+				if dv.Dot(normal) < 0:
+					normal = (-1)*normal
+				plane = Plane3D(P0, normal)
+				#Check every clipped point of face against the plane of otherFace
+				allInFront = True
+				for v in vertices
+					if plane.distFromPlane(v) > 0:
+						#One of the points is behind the plane
+						allInFront = False
+						break
+				area = getPolygonArea(vertices)
+				if area > faceArea:
+					faceArea = area
+					faceInFront = face
+		return faceInFront
+				
+	
 	def __str__(self):
 		ret = "Beam3D: origin = %s, neardist = %s, Points = "%(self.origin, self.neardist)
 		for v in self.frustVertices:

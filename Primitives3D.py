@@ -460,6 +460,20 @@ def getFaceNormal(verts):
 			return ret
 	return None
 
+#This function assumes the polygon is convex
+def getPolygonArea(verts):
+	if len(verts) < 3:
+		return 0.0
+	v1 = verts[1].pos - verts[0].pos
+	v2 = verts[1].pos - verts[0].pos
+	area = 0.0
+	#Triangulate and add area of each triangle
+	for i in range(2, len(verts)):
+		v1 = v2
+		v2 = verts[i].pos - verts[0].pos
+		area = area + 0.5*(v1%v2).Length()
+	return area
+
 if __name__ == '__main__':
 #	P0 = Point3D(-2.5, 0, -2.5)
 #	V0 = Vector3D(-0, -0, -1)

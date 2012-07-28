@@ -101,17 +101,7 @@ class MeshFace(object):
 	def getArea(self):
 		if not self.area:
 			verts = self.getVertices()
-			if len(verts) < 3:
-				return 0.0
-			v1 = verts[1].pos - verts[0].pos
-			v2 = verts[1].pos - verts[0].pos
-			area = 0.0
-			#Triangulate and add area of each triangle
-			for i in range(2, len(verts)):
-				v1 = v2
-				v2 = verts[i].pos - verts[0].pos
-				area = area + 0.5*(v1%v2).Length()
-			self.area = area
+			self.area = getPolygonArea(verts)
 		return self.area
 	
 	def getCentroid(self):
