@@ -62,8 +62,15 @@ def CCW2D(A, B, C):
 #Other member variables: 
 #mvMatrix: Modelview matrix for putting in the coordinate system of a beam
 #frustPoints: Points of the frustum on the 2D image plane
+#parent: The parent beam
+#order: The "depth" of the beam; e.g. order 0 means this beam started at
+#the origin and is heading towards its first boundary; order 1 means the beam
+#has reflected off of one face already
 class Beam3D(object):
-	def __init__(self, origin, frustVertices, face = None):
+	def __init__(self, origin, frustVertices, parent = None, order = 0, face = None):
+		self.parent = parent
+		self.order = order
+		self.children = []
 		self.frustVertices = frustVertices
 		self.origin = origin
 		self.neardist = 0.01
@@ -128,7 +135,7 @@ class Beam3D(object):
 				if doClip:
 					print "ERROR: Near clipping did not work properly"
 				else:
-					print "WARNING: Beam focus point is in the plane of the defining face!!"
+					print "WARNING: Beam focal point is in the plane of the defining face!!"
 					clippedVerts[i].z = 1e-5
 			clippedVerts[i].x = -self.neardist*clippedVerts[i].x/clippedVerts[i].z
 			clippedVerts[i].y = -self.neardist*clippedVerts[i].y/clippedVerts[i].z
@@ -146,10 +153,14 @@ class Beam3D(object):
 	#Following pseudocode on http://en.wikipedia.org/wiki/Sutherland%E2%80%93Hodgman_algorithm
 	#The function assumes that polygon2D has been clipped to the near plane
 	#and put in image plane coordinates (with the use of the function projectPolygon)
+	#Vertices that result from clipping are marked with the field "clippedVertex" as True
+	#so that they can be distinguished from vertices that are unchanged
 	#TODO: Make sure this function can handle a 1 Point polygon, so I can use that
 	#to test whether a receiver position is within a beam
 	def clipToFrustum(self, polygon2D):
 		outputList = polygon2D[:]
+		for v in outputList:
+			v.clippedVertex = False
 		for i in range(0, len(self.frustPoints)):
 			if len(outputList) == 0: #Special case: No Points left
 				break
@@ -175,6 +186,7 @@ class Beam3D(object):
 								print "EPS_E = %g"%getEPS(clipEdge[0], clipEdge[1], E)
 								print "1: Clip intersection not found: ClipEdge = [%s, %s], S = %s, E = %s"%(self.mvMatrix.Inverse()*clipEdge[0], self.mvMatrix.Inverse()*clipEdge[1], self.mvMatrix.Inverse()*S, self.mvMatrix.Inverse()*E)
 							else:
+								intersection.clippedVertex = True
 								outputList.append(intersection)
 					outputList.append(E)
 				elif CCWS != 1:
@@ -191,6 +203,7 @@ class Beam3D(object):
 							print "EPS_E = %g"%getEPS(clipEdge[0], clipEdge[1], E)
 							print "2: Clip intersection not found: ClipEdge = [%s, %s], S = %s, E = %s"%(self.mvMatrix.Inverse()*clipEdge[0], self.mvMatrix.Inverse()*clipEdge[1], self.mvMatrix.Inverse()*S, self.mvMatrix.Inverse()*E)
 						else:
+							intersection.clippedVertex = True
 							outputList.append(intersection)
 				S = E
 		#for v in outputList:
@@ -207,8 +220,8 @@ class Beam3D(object):
 	#Purpose: Return the largest face that is completely unobstructed from
 	#the point of view of this beam
 	#Faces contains a list of MeshFace objects to be clipped against this beam
-	#Retunrs a tuple (clipped vertices, face object)
-	def findFaceInFront(self, faces):
+	#Returns a tuple (projected and clipped vertices, clipped vertices back on face plane, face object)
+	def findLargestUnobstructedFace(self, faces):
 		validFaces = []
 		#First find the faces that are actually within the beam
 		for face in faces:
@@ -216,13 +229,17 @@ class Beam3D(object):
 			if len(clipped) > 0:
 				#Only consider the face if it is within the beam
 				validFaces.append((clipped, face))
-		faceInFront = None
+		if len(validFaces) == 0:
+			return None
+		#Stores the visible faces to save work for split beams
+		self.visibleFaces = [f[1] for f in validFaces]
+		retFace = None
 		faceArea = 0.0
 		for i in range(0, len(validFaces)):
 			face = validFaces[i]
 			#Put the clipped coordinates of this face back into world
-			#coordinates and put them back on their corresponding
-			#face before comparing them
+			#coordinates and move them from the image plane back to
+			#their corresponding face before comparing them
 			vertices = [self.mvMatrix.Inverse()*v for v in face[0]]
 			for i in range(0, len(vertices)):
 				ray = Ray3D(self.origin, vertices[i] - self.origin)
@@ -232,6 +249,7 @@ class Beam3D(object):
 				else:
 					vertices[i] = v[1]
 			#Check "face" against the plane of every other valid face
+			faceInFront = True
 			for j in range(0, len(validFaces)):
 				if i == j:
 					continue
@@ -244,17 +262,20 @@ class Beam3D(object):
 					normal = (-1)*normal
 				plane = Plane3D(P0, normal)
 				#Check every clipped point of face against the plane of otherFace
-				allInFront = True
-				for v in vertices
+				for v in vertices:
 					if plane.distFromPlane(v) > 0:
-						#One of the points is behind the plane
-						allInFront = False
+						#One of the points of this face is behind the plane
+						#of another face
+						faceInFront = False
 						break
+			if faceInFront:
 				area = getPolygonArea(vertices)
 				if area > faceArea:
 					faceArea = area
-					faceInFront = face
-		return faceInFront
+					retFace = (face[0], vertices, face[1])
+		if not retFace:
+			print "Warning: Faces visible in beam but no face found in front"
+		return retFace
 				
 	
 	def __str__(self):
@@ -262,6 +283,150 @@ class Beam3D(object):
 		for v in self.frustVertices:
 			ret = ret + "%s "%v
 		return ret
+
+	#split the beam around face into multiple convex regions
+	#beam and face are both assumed to be on the image plane so
+	#that convex splitting can occur in 2D
+	def splitBeam(beam, face):
+		newBeams = []
+		beamPoints = [P.Copy() for P in beam.frustPoints]
+		for i in range(0, len(face)):
+			#Step 1: Figure out where the line constructed from
+			#this face segment intersects the remaining part of the beam
+			#The two points of "face" under consideration
+			fP1 = face[i]
+			fP2 = face[(i+1)%len(face)]
+			faceLine = Line3D(fP1, fP2-fP1)
+			#Left and right beam indexes are the starting indexes of
+			#the beam segment that was intersected (i.e. the index before
+			#the intersection)
+			leftIntersection = None
+			leftBeamIndex = -1 
+			rightIntersection = None
+			rightBeamIndex = -1
+			for j in range(0, len(beamPoints)):
+				bP1 = beamPoints[j]
+				bP2 = beamPoints[(j+1)%len(beamPoints)]
+				if CCW2D(bP1, bP2, fP1) == 0:
+					leftIntersection = fP1
+					leftBeamIndex = j
+				if CCW2D(bP1, bP2, fP2) == 0:
+					rightIntersection = fP2
+					rightBeamIndex = j
+				beamLine = Line3D(bP1, bP2-bP1)
+				intersection = beamLine.intersectOtherLine(faceLine)
+				if intersection:
+					#If the intersection is actually within the segment
+					if CCW2D(bP1, bP2, intersection) == 0:
+						#Left intersection
+						if CCW2D(fP1, fP2, intersection) == -2:
+							leftIntersection = intersection
+							leftBeamIndex = j
+						elif CCW2D(fP1, fP2, intersection) == 2:
+							rightIntersection = intersection
+							rightBeamIndex = j
+						else:
+							print "ERROR: Unexpected beam segment face segment intersection case"
+			#Step 2: Figure out the polygon that's formed between the line
+			#from this face segment and the convex section of the beam it cuts off
+			if leftBeamIndex == -1 or rightBeamIndex == -1:
+				print "ERROR: No intersection found while trying to split beam"
+				continue
+			if leftBeamIndex == rightBeamIndex:
+				continue
+			newBeam = [leftIntersection]
+			index = leftBeamIndex+1
+			while True:
+				newBeam.append(beamPoints[index])
+				if index == rightBeamIndex:
+					break
+				index = (index+1)%len(beamPoints)
+			newBeam.append(rightIntersection)
+			newBeams.append(newBeam)
+			#Step 3: Cut the polygon we just found off of the remaining part of the beam
+			#As long as the intersection was not one of the beam endpoints
+			#add it to the appropriate place within the beam polygon
+			N = len(beamPoints)
+			leftAddPart = []
+			rightAddPart = []
+			if not PointsEqual(leftIntersection, beamPoints[leftBeamIndex]):
+				if not PointsEqual(leftIntersection, beamPoints[(leftBeamIndex+1)%N]):
+					leftAddPart = [leftIntersection]
+			if not PointsEqual(rightIntersection, beamPoints[rightBeamIndex]):
+				if not PointsEqual(rightIntersection, beamPoints[(rightBeamIndex+1)%N]):
+					rightAddPart = [rightIntersection]
+			if leftBeamIndex < rightBeamIndex:
+				beamPoints = beamPoints[0:leftBeamIndex+1] + leftAddPart + rightAddPart + beamPoints[rightBeamIndex+1:]
+			else:
+				beamPoints = leftAddPart + beamPoints[leftBeamIndex+1:] + beamPoints[0:rightBeamIndex+1] + rightAddPart
+		return newBeams
+		
+
+	class BeamTree(object):
+		#Construct all beams up to a maximum order of "maxOrder"
+		def __init__(self, origin, mesh, maxOrder = 0):
+			self.mesh = mesh
+			self.origin = origin
+			#There will be 6 roots of each beam, for the six faces of a cube
+			#that encompasses the full surface area possible
+			self.roots = []
+			#Front Face
+			verts = [v+origin for v in [Point3D(-1, -1, 1), Point3D(1, -1, 1), Point3D(1, 1, 1), Point3D(-1, 1, 1)]]
+			self.roots.append(Beam3D(origin, verts))
+			#Back Face
+			verts = [v+Point3D(0, 0, -2) for v in verts.reverse()]
+			self.roots.append(Beam3D(origin, verts))
+			#Left Face
+			verts = [v+origin for v in [Point3D(-1, -1, -1), Point3D(-1, -1, 1), Point3D(-1, 1, 1), Point3D(-1, 1, -1)]]
+			self.roots.append(Beam3D(origin, verts))
+			#Right Face
+			verts = [v+Point3D(2, 0, 0) for v in verts.reverse()]
+			self.roots.append(Beam3D(origin, verts))
+			#Top Face
+			verts = [v+origin for v in [Point3D(-1, 1, 1), Point3D(1, 1, 1), Point3D(1, 1, -1), Point3D(-1, 1, -1)]]
+			self.roots.append(Beam3D(origin, verts))
+			#Bottom face
+			verts = [v+Point3D(0, -2, 0) for v in verts.reverse()]
+			self.roots.append(Beam3D(origin, verts))
+			#Start the recursion on each one of these sub beams
+			for beam in self.roots:
+				self.intersectBeam(beam, self.mesh.faces, maxOrder, mesh)
+
+#class Beam3D(object):
+#	def __init__(self, origin, frustVertices, parent = None, order = 0, face = None):
+		
+		#A recursive function that intersects "beam" with "faces" and splits/reflects the beam
+		#until the maximum order is reached
+		def intersectBeam(self, beam, faces, maxOrder, mesh):
+			if beam.order == maxOrder:
+				return
+			if len(faces) == 0:
+				return
+			faceInFront = beam.findLargestUnobstructedFace(faces)
+			if not faceInFront:
+				return
+			
+			#TODO: Unit test every special case
+			#Split the beam around the visible face into sub-parts of the same
+			#order and recursively split those sub-parts
+			matrix = beam.mvMatrix.Inverse()
+			for subBeamPoints in splitBeam(beam, faceInFront[0]):
+				subBeamPoints = [matrix*P for P in subBeamPoints]
+				splitBeam = Beam3D(beam.origin, subBeamPoints, beam.parent, beam.order, beam.face)
+				self.intersectBeam(reflectedBeam, beam.visibleFaces, maxOrder, mesh)
+			
+			#Now Reflect the beam across this face and recursively intersect
+			#that beam which has an order of +1
+			#(this is second so that beam reflection occurs breadth first)
+			facePoints = faceInFront[1]
+			face = faceInFront[2]
+			faceNormal = getFaceNormal(facePoints)
+			dV = beam.origin - facePoints[0]
+			perpFaceV = faceNormal.proj(dV)
+			parFaceV = faceNormal.projPerp(dV)
+			mirrorP0 = facePoints[0] + parFaceV - perpFaceV
+			reflectedBeam = Beam3D(mirrorP0, facePoints, beam, beam.order+1, face)
+			self.intersectBeam(reflectedBeam, self.mesh.faces, maxOrder, mesh)
 
 if __name__== '__main__':
 	origin =  Point3D(-2.5, 2.5, -2)

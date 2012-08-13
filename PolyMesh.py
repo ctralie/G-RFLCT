@@ -370,6 +370,23 @@ class PolyMesh(object):
 				faces.append(f)
 		self.starRemeshFaces(faces)
 
+	#Divide every polygonal face with N sides into (N-2) triangles
+	#This assumes the polygonal faces are convex
+	def minTrianglesRemesh(self):
+		faces = list(self.faces)
+		for f in faces:
+			verts = f.getVertices()
+			if len(verts) <= 3:
+				continue
+			#Remove face and replace with (N-2) triangles
+			self.removeFace(f)
+			v0 = verts[0]
+			for i in range(1, len(verts)-1):
+				v1 = verts[i]
+				v2 = verts[i+1]
+				newFace = self.addFace([v0, v1, v2])
+		self.needsDisplayUpdate = True
+
 	#For every vertex, create a new vertex a parameter t [0-0.5] of
 	#the way along each of its N attached edges, and then "chop off"
 	#the pyramid whose base is formed b the new vertices and whose apex

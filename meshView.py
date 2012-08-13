@@ -94,6 +94,11 @@ class Viewer(object):
 		elif key in ['r', 'R']:
 			self.mesh.splitFaces()
 			print self.mesh
+		elif key in ['t', 'T']:
+			print "Triangulating mesh"
+			print self.mesh
+			self.mesh.minTrianglesRemesh()
+			print self.mesh
 		elif key in ['d', 'D']:
 			#Print depth image
 			width = self.GLUTwindow_width
