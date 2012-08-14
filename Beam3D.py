@@ -141,10 +141,14 @@ class Beam3D(object):
 			clippedVerts[i].y = -self.neardist*clippedVerts[i].y/clippedVerts[i].z
 			clippedVerts[i].z = -self.neardist
 		#Make sure the points are in counter clockwise order
-		if len(clippedVerts) >= 3:
-			ccw = CCW2D(clippedVerts[0], clippedVerts[1], clippedVerts[2])
+		for i in range(0, len(clippedVerts)-2):
+			P0 = clippedVerts[i]
+			P1 = clippedVerts[i+1]
+			P2 = clippedVerts[(i+2)%len(clippedVerts)]
+			ccw = CCW2D(P0, P1, P2)
 			if ccw == 1:
 				clippedVerts.reverse()
+				break
 		return clippedVerts
 	
 	
@@ -284,82 +288,90 @@ class Beam3D(object):
 			ret = ret + "%s "%v
 		return ret
 
-	#split the beam around face into multiple convex regions
-	#beam and face are both assumed to be on the image plane so
-	#that convex splitting can occur in 2D
-	def splitBeam(beam, face):
-		newBeams = []
-		beamPoints = [P.Copy() for P in beam.frustPoints]
-		for i in range(0, len(face)):
-			#Step 1: Figure out where the line constructed from
-			#this face segment intersects the remaining part of the beam
-			#The two points of "face" under consideration
-			fP1 = face[i]
-			fP2 = face[(i+1)%len(face)]
-			faceLine = Line3D(fP1, fP2-fP1)
-			#Left and right beam indexes are the starting indexes of
-			#the beam segment that was intersected (i.e. the index before
-			#the intersection)
-			leftIntersection = None
-			leftBeamIndex = -1 
-			rightIntersection = None
-			rightBeamIndex = -1
-			for j in range(0, len(beamPoints)):
-				bP1 = beamPoints[j]
-				bP2 = beamPoints[(j+1)%len(beamPoints)]
-				if CCW2D(bP1, bP2, fP1) == 0:
-					leftIntersection = fP1
-					leftBeamIndex = j
-				if CCW2D(bP1, bP2, fP2) == 0:
-					rightIntersection = fP2
-					rightBeamIndex = j
-				beamLine = Line3D(bP1, bP2-bP1)
-				intersection = beamLine.intersectOtherLine(faceLine)
-				if intersection:
-					#If the intersection is actually within the segment
-					if CCW2D(bP1, bP2, intersection) == 0:
-						#Left intersection
-						if CCW2D(fP1, fP2, intersection) == -2:
-							leftIntersection = intersection
-							leftBeamIndex = j
-						elif CCW2D(fP1, fP2, intersection) == 2:
-							rightIntersection = intersection
-							rightBeamIndex = j
-						else:
-							print "ERROR: Unexpected beam segment face segment intersection case"
-			#Step 2: Figure out the polygon that's formed between the line
-			#from this face segment and the convex section of the beam it cuts off
-			if leftBeamIndex == -1 or rightBeamIndex == -1:
-				print "ERROR: No intersection found while trying to split beam"
-				continue
-			if leftBeamIndex == rightBeamIndex:
-				continue
-			newBeam = [leftIntersection]
-			index = leftBeamIndex+1
-			while True:
+#split the beam around face into multiple convex regions
+#beam and face are both assumed to be on the image plane so
+#that convex splitting can occur in 2D
+def splitBeam(beam, face):
+	newBeams = []
+	beamPoints = [P.Copy() for P in beam.frustPoints]
+	for i in range(0, len(face)):
+		#Step 1: Figure out where the line constructed from
+		#this face segment intersects the remaining part of the beam
+		#The two points of "face" under consideration
+		fP1 = face[i]
+		fP2 = face[(i+1)%len(face)]
+		faceLine = Line3D(fP1, fP2-fP1)
+		#Left and right beam indexes are the starting indexes of
+		#the beam segment that was intersected (i.e. the index before
+		#the intersection)
+		leftIntersection = None
+		leftBeamIndex = -1 
+		rightIntersection = None
+		rightBeamIndex = -1
+		for j in range(0, len(beamPoints)):
+			bP1 = beamPoints[j]
+			bP2 = beamPoints[(j+1)%len(beamPoints)]
+			if CCW2D(bP1, bP2, fP1) == 0:
+				leftIntersection = fP1
+				leftBeamIndex = j
+			if CCW2D(bP1, bP2, fP2) == 0:
+				rightIntersection = fP2
+				rightBeamIndex = j
+			if leftIntersection and rightIntersection:
+				break
+			beamLine = Line3D(bP1, bP2-bP1)
+			intersection = beamLine.intersectOtherLine(faceLine)
+			if intersection:
+				#If the intersection is actually within the segment
+				if CCW2D(bP1, bP2, intersection) == 0:
+					#Left intersection
+					ccw = CCW2D(fP1, fP2, intersection)
+					if ccw == -2:
+						leftIntersection = intersection
+						leftBeamIndex = j
+					elif ccw == 2:
+						rightIntersection = intersection
+						rightBeamIndex = j
+					#else:
+					#	print "ERROR: Unexpected beam segment face segment intersection case, ccw = %i"%ccw
+		#Step 2: Figure out the polygon that's formed between the line
+		#from this face segment and the convex section of the beam it cuts off
+		if leftBeamIndex == -1 or rightBeamIndex == -1:
+			print "ERROR: Not all interesections were found while trying to split beam"
+			if leftBeamIndex == -1:
+				print "ERROR: No left intersection found while trying to split beam"
+			if rightBeamIndex == -1:
+				print "ERROR: No right intersection found while trying to split beam"
+			continue
+		if leftBeamIndex == rightBeamIndex:
+			continue
+		eps = 1e-4
+		newBeam = [leftIntersection]
+		index = (leftBeamIndex+1)%len(beamPoints)
+		while True:
+			if not PointsEqual2D(newBeam[-1], beamPoints[index], eps):
 				newBeam.append(beamPoints[index])
-				if index == rightBeamIndex:
-					break
-				index = (index+1)%len(beamPoints)
+			if index == rightBeamIndex:
+				break
+			index = (index+1)%len(beamPoints)
+		if not PointsEqual2D(newBeam[-1], rightIntersection, eps):
 			newBeam.append(rightIntersection)
-			newBeams.append(newBeam)
-			#Step 3: Cut the polygon we just found off of the remaining part of the beam
-			#As long as the intersection was not one of the beam endpoints
-			#add it to the appropriate place within the beam polygon
-			N = len(beamPoints)
-			leftAddPart = []
-			rightAddPart = []
-			if not PointsEqual(leftIntersection, beamPoints[leftBeamIndex]):
-				if not PointsEqual(leftIntersection, beamPoints[(leftBeamIndex+1)%N]):
-					leftAddPart = [leftIntersection]
-			if not PointsEqual(rightIntersection, beamPoints[rightBeamIndex]):
-				if not PointsEqual(rightIntersection, beamPoints[(rightBeamIndex+1)%N]):
-					rightAddPart = [rightIntersection]
-			if leftBeamIndex < rightBeamIndex:
-				beamPoints = beamPoints[0:leftBeamIndex+1] + leftAddPart + rightAddPart + beamPoints[rightBeamIndex+1:]
-			else:
-				beamPoints = leftAddPart + beamPoints[leftBeamIndex+1:] + beamPoints[0:rightBeamIndex+1] + rightAddPart
-		return newBeams
+		newBeams.append(newBeam)
+		#Step 3: Cut the polygon we just found off of the remaining part of the beam
+		#As long as the intersection was not one of the beam endpoints
+		#add it to the appropriate place within the beam polygon
+		cutBeamPoints = [rightIntersection]
+		index = (rightBeamIndex+1)%len(beamPoints)
+		while True:
+			if not PointsEqual2D(cutBeamPoints[-1], beamPoints[index], eps):
+				cutBeamPoints.append(beamPoints[index])
+			if index == leftBeamIndex:
+				break
+			index = (index + 1)%len(beamPoints)
+		if not PointsEqual2D(cutBeamPoints[-1], leftIntersection, eps):
+			cutBeamPoints.append(leftIntersection)
+		beamPoints = cutBeamPoints
+	return newBeams
 		
 
 	class BeamTree(object):
@@ -391,9 +403,6 @@ class Beam3D(object):
 			#Start the recursion on each one of these sub beams
 			for beam in self.roots:
 				self.intersectBeam(beam, self.mesh.faces, maxOrder, mesh)
-
-#class Beam3D(object):
-#	def __init__(self, origin, frustVertices, parent = None, order = 0, face = None):
 		
 		#A recursive function that intersects "beam" with "faces" and splits/reflects the beam
 		#until the maximum order is reached
