@@ -464,13 +464,13 @@ def getFaceNormal(verts):
 def getPolygonArea(verts):
 	if len(verts) < 3:
 		return 0.0
-	v1 = verts[1].pos - verts[0].pos
-	v2 = verts[1].pos - verts[0].pos
+	v1 = verts[1] - verts[0]
+	v2 = verts[1] - verts[0]
 	area = 0.0
 	#Triangulate and add area of each triangle
 	for i in range(2, len(verts)):
 		v1 = v2
-		v2 = verts[i].pos - verts[0].pos
+		v2 = verts[i] - verts[0]
 		area = area + 0.5*(v1%v2).Length()
 	return area
 

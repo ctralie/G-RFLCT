@@ -266,11 +266,11 @@ class EMScene(object):
 		self.getMeshListRecurse(self.rootEMNode, self.meshes, self.rootEMNode.transformation)
 		
 
-	def renderGLRecurse(self, currEMNode, matrix):
+	def renderGLRecurse(self, currEMNode, matrix, drawEdges):
 		for child in currEMNode.children:
 			transform = matrix*child.transformation
 			if len(child.children) > 0:
-				self.renderGLRecurse(child, transform)
+				self.renderGLRecurse(child, transform, drawEdges)
 			if child.mesh != None:
 				#Set optical material
 				glEnable(GL_LIGHTING)
@@ -290,11 +290,11 @@ class EMScene(object):
 				#meshes have been pre-transformed
 				#glPushMatrix()
 				#glMultMatrixd(transform.Transpose().m)
-				child.mesh.renderGL(drawEdges = 1)
+				child.mesh.renderGL(drawEdges)
 				#glPopMatrix()
 	
-	def renderGL(self):
-		self.renderGLRecurse(self.rootEMNode, self.rootEMNode.transformation)
+	def renderGL(self, drawEdges = 1):
+		self.renderGLRecurse(self.rootEMNode, self.rootEMNode.transformation, drawEdges)
 	
 	#TODO: Add better recursive intersect method with bounding box tests
 	#NOTE: All meshes are in world coordinates now so no longer need to

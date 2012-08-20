@@ -114,7 +114,7 @@ class Viewer(object):
 		#glEnd()
 		
 		
-		if isinstance(self.scene.Source, Point3D):
+		if self.scene.Source:
 			glDisable(GL_LIGHTING)
 			glColor3f(1, 0, 0)
 			P = self.scene.Source
@@ -124,7 +124,7 @@ class Viewer(object):
 			gluSphere(quadric, 0.1, 32, 32)
 			glPopMatrix()
 		
-		if isinstance(self.scene.Receiver, Point3D):
+		if self.scene.Receiver:
 			glDisable(GL_LIGHTING)
 			glColor3f(0, 0, 1)
 			P = self.scene.Receiver
@@ -148,7 +148,7 @@ class Viewer(object):
 		
 		if SHOWIMAGES == True:
 			if False:
-				if isinstance(self.scene.Source, Point3D):
+				if self.scene.Source:
 					glDisable(GL_LIGHTING)
 					glColor3f(0, 1, 0)
 					glBegin(GL_LINES)
@@ -159,7 +159,7 @@ class Viewer(object):
 						glVertex3f(P1.x, P1.y, P1.z)				
 					glEnd()
 		
-				if isinstance(self.scene.Receiver, Point3D):
+				if self.scene.Receiver:
 					glDisable(GL_LIGHTING)
 					glColor3f(0, 1, 1)
 					glBegin(GL_LINES)

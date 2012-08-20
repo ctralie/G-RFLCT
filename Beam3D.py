@@ -66,17 +66,21 @@ def CCW2D(A, B, C):
 #order: The "depth" of the beam; e.g. order 0 means this beam started at
 #the origin and is heading towards its first boundary; order 1 means the beam
 #has reflected off of one face already
+#dummy: Used to construct the root of the beam tree
 class Beam3D(object):
-	def __init__(self, origin, frustVertices, parent = None, order = 0, face = None):
+	def __init__(self, origin, frustVertices, parent = None, order = 0, face = None, dummy = False):
+		self.dummy = dummy
+		self.children = []
 		self.parent = parent
 		self.order = order
-		self.children = []
-		self.frustVertices = frustVertices
 		self.origin = origin
+		if dummy:
+			return
+		self.frustVertices = frustVertices
 		self.neardist = 0.01
 		self.face = face
 		if len(frustVertices) < 3:
-			print "ERROR: Less than 3 frustVertices on beam projection face"
+			print "ERROR: Only %i frustVertices on beam projection face"%len(frustVertices)
 			return
 		self.towards = getFaceNormal(frustVertices)
 		dV = frustVertices[0] - origin
@@ -225,6 +229,7 @@ class Beam3D(object):
 	#the point of view of this beam
 	#Faces contains a list of MeshFace objects to be clipped against this beam
 	#Returns a tuple (projected and clipped vertices, clipped vertices back on face plane, face object)
+	#Side effects: adds the field "visibleFaces" to the beam
 	def findLargestUnobstructedFace(self, faces):
 		validFaces = []
 		#First find the faces that are actually within the beam
@@ -259,10 +264,10 @@ class Beam3D(object):
 					continue
 				otherFace = validFaces[j]
 				normal = otherFace[1].getNormal()
-				P0 = otherFace[1].starV.pos
+				P0 = otherFace[1].startV.pos
 				dV = P0 - self.origin
 				#Make sure plane normal is pointing in the direction of this beam
-				if dv.Dot(normal) < 0:
+				if dV.Dot(normal) < 0:
 					normal = (-1)*normal
 				plane = Plane3D(P0, normal)
 				#Check every clipped point of face against the plane of otherFace
@@ -374,70 +379,92 @@ def splitBeam(beam, face):
 	return newBeams
 		
 
-	class BeamTree(object):
-		#Construct all beams up to a maximum order of "maxOrder"
-		def __init__(self, origin, mesh, maxOrder = 0):
-			self.mesh = mesh
-			self.origin = origin
-			#There will be 6 roots of each beam, for the six faces of a cube
-			#that encompasses the full surface area possible
-			self.roots = []
-			#Front Face
-			verts = [v+origin for v in [Point3D(-1, -1, 1), Point3D(1, -1, 1), Point3D(1, 1, 1), Point3D(-1, 1, 1)]]
-			self.roots.append(Beam3D(origin, verts))
-			#Back Face
-			verts = [v+Point3D(0, 0, -2) for v in verts.reverse()]
-			self.roots.append(Beam3D(origin, verts))
-			#Left Face
-			verts = [v+origin for v in [Point3D(-1, -1, -1), Point3D(-1, -1, 1), Point3D(-1, 1, 1), Point3D(-1, 1, -1)]]
-			self.roots.append(Beam3D(origin, verts))
-			#Right Face
-			verts = [v+Point3D(2, 0, 0) for v in verts.reverse()]
-			self.roots.append(Beam3D(origin, verts))
-			#Top Face
-			verts = [v+origin for v in [Point3D(-1, 1, 1), Point3D(1, 1, 1), Point3D(1, 1, -1), Point3D(-1, 1, -1)]]
-			self.roots.append(Beam3D(origin, verts))
-			#Bottom face
-			verts = [v+Point3D(0, -2, 0) for v in verts.reverse()]
-			self.roots.append(Beam3D(origin, verts))
-			#Start the recursion on each one of these sub beams
-			for beam in self.roots:
-				self.intersectBeam(beam, self.mesh.faces, maxOrder, mesh)
+class BeamTree(object):
+	#Construct all beams up to a maximum order of "maxOrder"
+	#allFaces is a list of mesh face objects in the scene in world coordinates
+	def __init__(self, origin, allFaces, maxOrder = 0):
+		self.allFaces = allFaces
+		self.origin = origin
+		#"root" is where the beam tree starts; it is a dummy beam
+		#There will be 6 roots of each beam, for the six faces of a cube
+		#that encompasses the full surface area possible
+		self.root = Beam3D(origin, [], None, 0, None, True)
+		roots = []
+		#Front Face
+		verts = [v+origin for v in [Point3D(-1, -1, 1), Point3D(1, -1, 1), Point3D(1, 1, 1), Point3D(-1, 1, 1)]]
+		roots.append(Beam3D(origin, verts, self.root))
+		#Back Face
+		verts.reverse()
+		verts = [v+Point3D(0, 0, -2) for v in verts]
+		roots.append(Beam3D(origin, verts, self.root))
+		#Left Face
+		verts = [v+origin for v in [Point3D(-1, -1, -1), Point3D(-1, -1, 1), Point3D(-1, 1, 1), Point3D(-1, 1, -1)]]
+		roots.append(Beam3D(origin, verts, self.root))
+		#Right Face
+		verts.reverse()
+		verts = [v+Point3D(2, 0, 0) for v in verts]
+		roots.append(Beam3D(origin, verts, self.root))
+		#Top Face
+		verts = [v+origin for v in [Point3D(-1, 1, 1), Point3D(1, 1, 1), Point3D(1, 1, -1), Point3D(-1, 1, -1)]]
+		roots.append(Beam3D(origin, verts, self.root))
+		#Bottom face
+		verts.reverse()
+		verts = [v+Point3D(0, -2, 0) for v in verts]
+		roots.append(Beam3D(origin, verts, self.root))
+		#Start the recursion on each one of these sub beams
+		for beam in roots:
+			self.root.children.append(beam)
+			self.intersectBeam(beam, self.allFaces, maxOrder)
+	
+	#A recursive function that intersects "beam" with "faces" and splits/reflects the beam
+	#until the maximum order is reached
+	def intersectBeam(self, beam, faces, maxOrder):
+		if beam.order == maxOrder:
+			return
+		if len(faces) == 0:
+			return
+		faceInFront = beam.findLargestUnobstructedFace(faces)
+		if not faceInFront: #If there's just free space
+			return
 		
-		#A recursive function that intersects "beam" with "faces" and splits/reflects the beam
-		#until the maximum order is reached
-		def intersectBeam(self, beam, faces, maxOrder, mesh):
-			if beam.order == maxOrder:
-				return
-			if len(faces) == 0:
-				return
-			faceInFront = beam.findLargestUnobstructedFace(faces)
-			if not faceInFront:
-				return
-			
-			#TODO: Unit test every special case
-			#Split the beam around the visible face into sub-parts of the same
-			#order and recursively split those sub-parts
-			matrix = beam.mvMatrix.Inverse()
-			for subBeamPoints in splitBeam(beam, faceInFront[0]):
-				subBeamPoints = [matrix*P for P in subBeamPoints]
-				splitBeam = Beam3D(beam.origin, subBeamPoints, beam.parent, beam.order, beam.face)
-				self.intersectBeam(reflectedBeam, beam.visibleFaces, maxOrder, mesh)
-			
-			#Now Reflect the beam across this face and recursively intersect
-			#that beam which has an order of +1
-			#(this is second so that beam reflection occurs breadth first)
-			facePoints = faceInFront[1]
-			face = faceInFront[2]
-			faceNormal = getFaceNormal(facePoints)
-			dV = beam.origin - facePoints[0]
-			perpFaceV = faceNormal.proj(dV)
-			parFaceV = faceNormal.projPerp(dV)
-			mirrorP0 = facePoints[0] + parFaceV - perpFaceV
-			reflectedBeam = Beam3D(mirrorP0, facePoints, beam, beam.order+1, face)
-			self.intersectBeam(reflectedBeam, self.mesh.faces, maxOrder, mesh)
+		#Split the beam around the visible face into sub-parts of the same
+		#order and recursively split those sub-parts
+		matrix = beam.mvMatrix.Inverse()
+		for subBeamPoints in splitBeam(beam, faceInFront[0]):
+			if len(subBeamPoints) < 3:
+				continue
+			subBeamPoints = [matrix*P for P in subBeamPoints]
+			subBeam = Beam3D(beam.origin, subBeamPoints, beam.parent, beam.order, beam.face)
+			#Since this is a split and not a reflection the split part has the same
+			#parent as "beam"
+			beam.parent.children.append(subBeam)
+			self.intersectBeam(subBeam, beam.visibleFaces, maxOrder)
+		
+		#Now Reflect the beam across this face and recursively intersect
+		#that beam which has an order of +1
+		#(this is second so that beam reflection occurs breadth first)
+		#faceInFront is a tuple (projected and clipped vertices, clipped vertices back on face plane, face object)
+		facePoints = faceInFront[1]
+		face = faceInFront[2]
+		#First generate split beam and add it to the list of children
+		frontBeam = Beam3D(beam.origin, facePoints, beam.parent, beam.order, beam.face)
+		beam.parent.children.append(frontBeam)
+		#Next remove "beam" from its parent's children list since it's 
+		#no longer relevant and has been split into a bunch of pieces
+		#TODO: Make removing more efficient
+		beam.parent.children.remove(beam)
+		#Now add the reflected beam as a child of the split front beam
+		faceNormal = getFaceNormal(facePoints)
+		dV = beam.origin - facePoints[0]
+		perpFaceV = faceNormal.proj(dV)
+		parFaceV = faceNormal.projPerp(dV)
+		mirrorP0 = facePoints[0] + parFaceV - perpFaceV
+		reflectedBeam = Beam3D(mirrorP0, facePoints, frontBeam, beam.order+1, face)
+		frontBeam.children.append(reflectedBeam)
+		self.intersectBeam(reflectedBeam, self.allFaces, maxOrder)
 
 if __name__== '__main__':
+	tree = BeamTree(Point3D(0, 0, 0), [])
 	origin =  Point3D(-2.5, 2.5, -2)
 	frustPoints = [Point3D(1.25, 2.5, 2.5), Point3D(1.25, 2.5, -2.5), Point3D(3.75, 2.5, -2.5), Point3D(3.75, 2.5, 2.5)]
 	points = [Point3D(-4.5, -3.75, 0), Point3D(0.5, -3.75, 0), Point3D(0.5, -6.25, 0), Point3D(-4.5, -6.25, 0)]
