@@ -3,6 +3,7 @@ from Shapes3D import *
 from Graphics3D import *
 from PolyMesh import *
 from Cameras3D import *
+from OpenGL.GL import *
 import math
 
 #TODO: Update image sources pruning to make use of this class
@@ -95,6 +96,7 @@ class Beam3D(object):
 		#(NOTE this function follows the OpenGL convention that things in
 		#front of the beam are -z)
 		self.mvMatrix = getCameraMatrix(self.towards, self.up, self.right, self.origin)
+		self.mvMatrixInverse = self.mvMatrix.Inverse()
 		#Now calculate the near distance if the beam is associated with a face
 		if face:
 			P = self.mvMatrix*frustVertices[0]
@@ -132,7 +134,7 @@ class Beam3D(object):
 				#Otherwise two vertices are behind
 		#FOR DEBUGGING
 		#for v in clippedVerts:
-		#	print self.mvMatrix.Inverse()*v
+		#	print self.mvMatrixInverse*v
 		#Now do the perspective projection
 		for i in range(0, len(clippedVerts)):
 			if clippedVerts[i].z == 0:
@@ -192,7 +194,7 @@ class Beam3D(object):
 								print "CCWE = %i, CCWS = %i"%(CCWE, CCWS)
 								print "EPS_S = %g"%getEPS(clipEdge[0], clipEdge[1], S)
 								print "EPS_E = %g"%getEPS(clipEdge[0], clipEdge[1], E)
-								print "1: Clip intersection not found: ClipEdge = [%s, %s], S = %s, E = %s"%(self.mvMatrix.Inverse()*clipEdge[0], self.mvMatrix.Inverse()*clipEdge[1], self.mvMatrix.Inverse()*S, self.mvMatrix.Inverse()*E)
+								print "1: Clip intersection not found: ClipEdge = [%s, %s], S = %s, E = %s"%(self.mvMatrixInverse*clipEdge[0], self.mvMatrixInverse*clipEdge[1], self.mvMatrixInverse*S, self.mvMatrixInverse*E)
 							else:
 								intersection.clippedVertex = True
 								outputList.append(intersection)
@@ -209,13 +211,13 @@ class Beam3D(object):
 							print "CCWE = %i, CCWS = %i"%(CCWE, CCWS)
 							print "EPS_S = %g"%getEPS(clipEdge[0], clipEdge[1], S)
 							print "EPS_E = %g"%getEPS(clipEdge[0], clipEdge[1], E)
-							print "2: Clip intersection not found: ClipEdge = [%s, %s], S = %s, E = %s"%(self.mvMatrix.Inverse()*clipEdge[0], self.mvMatrix.Inverse()*clipEdge[1], self.mvMatrix.Inverse()*S, self.mvMatrix.Inverse()*E)
+							print "2: Clip intersection not found: ClipEdge = [%s, %s], S = %s, E = %s"%(self.mvMatrixInverse*clipEdge[0], self.mvMatrixInverse*clipEdge[1], self.mvMatrixInverse*S, self.mvMatrixInverse*E)
 						else:
 							intersection.clippedVertex = True
 							outputList.append(intersection)
 				S = E
 		#for v in outputList:
-		#	print self.mvMatrix.Inverse()*v
+		#	print self.mvMatrixInverse*v
 		return outputList
 	
 	def clipPolygon(self, poly):
@@ -249,12 +251,14 @@ class Beam3D(object):
 			#Put the clipped coordinates of this face back into world
 			#coordinates and move them from the image plane back to
 			#their corresponding face before comparing them
-			vertices = [self.mvMatrix.Inverse()*v for v in face[0]]
+			vertices = [self.mvMatrixInverse*v for v in face[0]]
+			plane = face[1].getPlane()
 			for i in range(0, len(vertices)):
-				ray = Ray3D(self.origin, vertices[i] - self.origin)
-				v = ray.intersectMeshFace(face[1])
+				line = Line3D(self.origin, vertices[i] - self.origin)
+				v = line.intersectPlane(plane)
 				if not v:
 					print "ERROR: Unable to put face back into world coordinates"
+					print vertices[i] - self.origin
 				else:
 					vertices[i] = v[1]
 			#Check "face" against the plane of every other valid face
@@ -285,7 +289,62 @@ class Beam3D(object):
 		if not retFace:
 			print "Warning: Faces visible in beam but no face found in front"
 		return retFace
-				
+	
+	def drawPolygon(self, poly, minX, maxX, minY, maxY, dim):
+		border = 10
+		scaleX = float(dim - border*2)/(maxX - minX)
+		scaleY = float(dim - border*2)/(maxY - minY)
+		glBegin(GL_POLYGON)
+		for P in poly:
+			glVertex2f(border+(P.x-minX)*scaleX, border+(P.y-minY)*scaleY)
+		glEnd()
+		glPointSize(6)
+		glBegin(GL_POINTS)
+		for P in poly:
+			glVertex2f(border+(P.x-minX)*scaleX, border+(P.y-minY)*scaleY)
+		glEnd()
+	
+	def drawProjectedMeshFaces(self, faces, dim):
+		glDisable(GL_LIGHTING)
+		glMatrixMode(GL_PROJECTION)
+		glLoadIdentity()
+		glOrtho(0, dim, dim, 0, 0, 1)
+		glDisable(GL_DEPTH_TEST)
+		glMatrixMode (GL_MODELVIEW)
+		glLoadIdentity()
+		glColor3f(1, 1, 1)
+		glPolygonMode(GL_FRONT_AND_BACK, GL_FILL)
+		glBegin(GL_POLYGON)
+		glVertex2f(0, 0)
+		glVertex2f(dim, 0)
+		glVertex2f(dim, dim)
+		glVertex2f(0, dim)
+		glEnd()
+		#Calculate bounding box for beam
+		minX = min([P.x for P in self.frustPoints])
+		maxX = max([P.x for P in self.frustPoints])
+		minY = min([P.y for P in self.frustPoints])
+		maxY = max([P.y for P in self.frustPoints])
+		clippedFaces = [self.clipMeshFace(face) for face in faces]
+		glColor3f(0, 0, 1)
+		glPolygonMode(GL_FRONT_AND_BACK, GL_LINE)
+		for face in clippedFaces:
+			self.drawPolygon(face, minX, maxX, minY, maxY, dim)
+		glColor3f(1, 0, 0)
+		glPolygonMode(GL_FRONT_AND_BACK, GL_FILL)
+		faceInFront = self.findLargestUnobstructedFace(faces)
+		self.drawPolygon(faceInFront[0], minX, maxX, minY, maxY, dim)
+		subBeams = splitBeam(self, faceInFront[0])
+		subBeamPoints = [self.projectPolygon(subBeam) for subBeam in subBeams]
+		subBeamPoints = subBeams
+		glColor3f(0, 1, 0)
+		glPolygonMode(GL_FRONT_AND_BACK, GL_LINE)
+		for subBeam in subBeamPoints:
+			self.drawPolygon(subBeam, minX, maxX, minY, maxY, dim)
+		glPolygonMode(GL_FRONT_AND_BACK, GL_FILL)
+		glEnable(GL_DEPTH_TEST)
+		glEnable(GL_LIGHTING)
+		
 	
 	def __str__(self):
 		ret = "Beam3D: origin = %s, neardist = %s, Points = "%(self.origin, self.neardist)
@@ -361,7 +420,10 @@ def splitBeam(beam, face):
 			index = (index+1)%len(beamPoints)
 		if not PointsEqual2D(newBeam[-1], rightIntersection, eps):
 			newBeam.append(rightIntersection)
-		newBeams.append(newBeam)
+		#This takes care of the corner case where only an edge or 
+		#point is inside the beam
+		if len(newBeam) >= 3:
+			newBeams.append(newBeam)
 		#Step 3: Cut the polygon we just found off of the remaining part of the beam
 		#As long as the intersection was not one of the beam endpoints
 		#add it to the appropriate place within the beam polygon
@@ -376,6 +438,9 @@ def splitBeam(beam, face):
 		if not PointsEqual2D(cutBeamPoints[-1], leftIntersection, eps):
 			cutBeamPoints.append(leftIntersection)
 		beamPoints = cutBeamPoints
+	#Put the beams back into world coordinates now
+	matrix = beam.mvMatrix
+	newBeams = [[beam.mvMatrixInverse*P for P in newBeamPoints] for newBeamPoints in newBeams]
 	return newBeams
 		
 
@@ -393,24 +458,25 @@ class BeamTree(object):
 		#Front Face
 		verts = [v+origin for v in [Point3D(-1, -1, 1), Point3D(1, -1, 1), Point3D(1, 1, 1), Point3D(-1, 1, 1)]]
 		roots.append(Beam3D(origin, verts, self.root))
-		#Back Face
-		verts.reverse()
-		verts = [v+Point3D(0, 0, -2) for v in verts]
-		roots.append(Beam3D(origin, verts, self.root))
-		#Left Face
-		verts = [v+origin for v in [Point3D(-1, -1, -1), Point3D(-1, -1, 1), Point3D(-1, 1, 1), Point3D(-1, 1, -1)]]
-		roots.append(Beam3D(origin, verts, self.root))
-		#Right Face
-		verts.reverse()
-		verts = [v+Point3D(2, 0, 0) for v in verts]
-		roots.append(Beam3D(origin, verts, self.root))
-		#Top Face
-		verts = [v+origin for v in [Point3D(-1, 1, 1), Point3D(1, 1, 1), Point3D(1, 1, -1), Point3D(-1, 1, -1)]]
-		roots.append(Beam3D(origin, verts, self.root))
-		#Bottom face
-		verts.reverse()
-		verts = [v+Point3D(0, -2, 0) for v in verts]
-		roots.append(Beam3D(origin, verts, self.root))
+		if False:
+			#Back Face
+			verts.reverse()
+			verts = [v+Point3D(0, 0, -2) for v in verts]
+			roots.append(Beam3D(origin, verts, self.root))
+			#Left Face
+			verts = [v+origin for v in [Point3D(-1, -1, -1), Point3D(-1, -1, 1), Point3D(-1, 1, 1), Point3D(-1, 1, -1)]]
+			roots.append(Beam3D(origin, verts, self.root))
+			#Right Face
+			verts.reverse()
+			verts = [v+Point3D(2, 0, 0) for v in verts]
+			roots.append(Beam3D(origin, verts, self.root))
+			#Top Face
+			verts = [v+origin for v in [Point3D(-1, 1, 1), Point3D(1, 1, 1), Point3D(1, 1, -1), Point3D(-1, 1, -1)]]
+			roots.append(Beam3D(origin, verts, self.root))
+			#Bottom face
+			verts.reverse()
+			verts = [v+Point3D(0, -2, 0) for v in verts]
+			roots.append(Beam3D(origin, verts, self.root))
 		#Start the recursion on each one of these sub beams
 		for beam in roots:
 			self.root.children.append(beam)
@@ -429,10 +495,10 @@ class BeamTree(object):
 		
 		#Split the beam around the visible face into sub-parts of the same
 		#order and recursively split those sub-parts
-		matrix = beam.mvMatrix.Inverse()
-		for subBeamPoints in splitBeam(beam, faceInFront[0]):
-			if len(subBeamPoints) < 3:
-				continue
+		matrix = beam.mvMatrixInverse
+		subBeams = splitBeam(beam, faceInFront[0])
+		print "There are %i subbeams"%len(subBeams)
+		for subBeamPoints in subBeams:
 			subBeamPoints = [matrix*P for P in subBeamPoints]
 			subBeam = Beam3D(beam.origin, subBeamPoints, beam.parent, beam.order, beam.face)
 			#Since this is a split and not a reflection the split part has the same
@@ -481,4 +547,4 @@ if __name__ == '__main__old':
 	poly = beam.projectPolygon(poly)
 	poly = beam.clipToFrustum(poly)
 	for v in poly:
-		print beam.mvMatrix.Inverse()*v
+		print beam.mvMatrixInverse*v

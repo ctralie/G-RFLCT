@@ -7,6 +7,7 @@ from PolyMesh import *
 from Cameras3D import *
 from EMScene import *
 from Beam3D import *
+import Image
 from sys import argv
 
 def splitIntoRGBA(val):
@@ -23,7 +24,7 @@ def extractFromRGBA(R, G, B, A):
 class Viewer(object):
 	def updateCameraVars(self):
 		self.yfov = self.camera.yfov
-		self.xfov = self.yfov*float(self.GLUTwindow_width)/float(self.GLUTwindow_height)
+		self.xfov = self.yfov*float(self.pixWidth)/float(self.pixHeight)
 		self.nearDist = 0.01
 		self.farDist = 100.0
 		self.xScale = math.tan(self.xfov/2.0)
@@ -32,15 +33,15 @@ class Viewer(object):
 
 	def __init__(self, filename):
 		#GLUT State variables
-		self.GLUTwindow_height = 800
-		self.GLUTwindow_width = 800
+		self.pixHeight = 800
+		self.pixWidth = 1600
 		self.GLUTmouse = [0, 0]
 		self.GLUTButton = [0, 0, 0, 0, 0]
 		self.GLUTModifiers = 0
 		self.keys = {}
 		
 		#Camera and projection state variables
-		self.camera = MouseSphericalCamera(self.GLUTwindow_width, self.GLUTwindow_height)
+		self.camera = MouseSphericalCamera(self.pixWidth, self.pixHeight)
 		self.updateCameraVars()
 		
 		self.scene = EMScene()
@@ -50,33 +51,38 @@ class Viewer(object):
 			self.meshFaces = self.meshFaces + mesh.faces
 		
 		self.selectedFace = None
+		self.drawBeam = False
+		self.beamTrans = 0.3 #Beam transparency
 		self.beamTree = BeamTree(self.scene.Source, self.meshFaces, 1)
 		
 		self.initGL()
 
 	def GLUTResize(self, w, h):
 		glViewport(0, 0, w, h)
-		self.GLUTwindow_width = w
-		self.GLUTwindow_height = h
+		self.pixWidth = w
+		self.pixHeight = h
 		self.camera.pixWidth = w
 		self.camera.pixHeight = h
 		self.updateCameraVars()
 		glutPostRedisplay()
 
 	def GLUTRedraw(self):
-		#Set up projection matrix
+		N = len(self.meshFaces)
+		[Rclear, Gclear, Bclear, Aclear] = splitIntoRGBA(N)
+		glClearColor(Rclear, Gclear, Bclear, Aclear)
+		glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT)
+		
+		#First draw the 3D beam scene on the left
+		glViewport(0, 0, 800, 800)
+		glScissor(0, 0, 800, 800)
 		glMatrixMode(GL_PROJECTION)
 		glLoadIdentity()
-		gluPerspective(180.0*self.camera.yfov/math.pi, float(self.GLUTwindow_width)/self.GLUTwindow_height, 0.01, 100.0)
+		gluPerspective(180.0*self.camera.yfov/math.pi, 1.0, 0.01, 100.0)
 		
-		#Set up modelview matrix
 		self.camera.gotoCameraFrame()
 		if self.pickingFace:
 			self.pickFace()
 		else:
-			glClearColor(0.0, 0.0, 0.0, 0.0)
-			glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT)
-		
 			glLightfv(GL_LIGHT0, GL_POSITION, [3.0, 4.0, 5.0, 0.0]);
 			glLightfv(GL_LIGHT1, GL_POSITION,  [-3.0, -2.0, -3.0, 0.0]);
 		
@@ -100,25 +106,63 @@ class Viewer(object):
 				glTranslatef(P.x, P.y, P.z)
 				gluSphere(quadric, 0.1, 32, 32)
 				glPopMatrix()
+			
+			if self.drawBeam:
+				glDisable(GL_LIGHTING)
+				glEnable(GL_BLEND)
+				glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA)
+				beam = self.beamTree.root.children[0]
+				P0 = beam.origin
+				Points = [P0 + 5*(v-P0) for v in beam.frustVertices]
+				glColor4f(0, 1, 0, self.beamTrans)
+				glBegin(GL_TRIANGLES)
+				for i in range(0, len(Points)):
+					P1 = Points[i]
+					P2 = Points[(i+1)%len(Points)]
+					glVertex3f(P0.x, P0.y, P0.z)
+					glVertex3f(P1.x, P1.y, P1.z)
+					glVertex3f(P2.x, P2.y, P2.z)
+				glEnd()
+				glColor3f(0, 0, 1)
+				glLineWidth(5)
+				glBegin(GL_LINES)
+				for P in Points:
+					glVertex3f(P0.x, P0.y, P0.z)
+					glVertex3f(P.x, P.y, P.z)
+				glEnd()
+				glDisable(GL_BLEND)
+				glEnable(GL_LIGHTING)
 		
+		
+			#Next draw the 2D projection scene on the right
+			dim = self.pixWidth - 800
+			glViewport(800, 0, dim, dim)
+			glScissor(800, 0, dim, dim)
+			#self.beamTree.root.children[0].drawProjectedMeshFaces(self.meshFaces, dim)
+				
 			glutSwapBuffers()
 	
 	def pickFace(self):
 		glDisable(GL_LIGHTING)
 		N = len(self.meshFaces)
-		[Rclear, Gclear, Bclear, Aclear] = splitIntoRGBA(N)
-		glClearColor(Rclear, Gclear, Bclear, Aclear)
-		glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT)
 		for i in range(0, len(self.meshFaces)):
 			face = self.meshFaces[i]
 			[R, G, B, A] = splitIntoRGBA(i)
 			glColor4ub(R, G, B, A)
 			face.drawFilled()
 		glutSwapBuffers()
-		[xdim, ydim] = [self.GLUTwindow_width, self.GLUTwindow_height]
-		pixels = glReadPixelsb(0, 0, xdim, ydim, GL_RGBA, GL_UNSIGNED_BYTE)
+		[xdim, ydim] = [self.pixWidth, self.pixHeight]
+		pixels = glReadPixelsb(0, 0, 800, 800, GL_RGBA, GL_UNSIGNED_BYTE)
+		#im = Image.new("RGB", (800, 800))
+		#pix = im.load()
+		#for x in range(0, 800):
+		#	for y in range(0, 800):
+		#		pix[x, y] = (pixels[x][y][0], pixels[x][y][1], pixels[x][y][2])
+		#im.save("out.png")
+		#print len(pixels)
+		#print len(pixels[0])
 		[x, y] = [self.GLUTmouse[0], self.GLUTmouse[1]]
-		pixel = pixels[y, x]
+		pixel = pixels[y][x]
 		faceIndex = extractFromRGBA(pixel[0], pixel[1], pixel[2], pixel[3])
 		if faceIndex < N:
 			self.selectedFace = self.meshFaces[faceIndex]
@@ -130,7 +174,7 @@ class Viewer(object):
 		glutPostRedisplay()
 	
 	def handleMouseStuff(self, x, y):
-		y = self.GLUTwindow_height - y
+		y = self.pixHeight - y
 		self.GLUTmouse[0] = x
 		self.GLUTmouse[1] = y
 		self.GLUTmodifiers = glutGetModifiers()
@@ -143,6 +187,8 @@ class Viewer(object):
 	def GLUTKeyboardUp(self, key, x, y):
 		self.handleMouseStuff(x, y)
 		self.keys[key] = False
+		if key == ' ':
+			self.drawBeam = not self.drawBeam
 		#if key in ['e', 'E']:
 		#	self.drawEdges = 1 - self.drawEdges
 		#elif key in ['v', 'V']:
@@ -189,7 +235,7 @@ class Viewer(object):
 	def initGL(self):
 		glutInit('')
 		glutInitDisplayMode(GLUT_DOUBLE | GLUT_RGB | GLUT_DEPTH)
-		glutInitWindowSize(self.GLUTwindow_width, self.GLUTwindow_height)
+		glutInitWindowSize(self.pixWidth, self.pixHeight)
 		glutInitWindowPosition(50, 50)
 		glutCreateWindow('Viewer')
 		glutReshapeFunc(self.GLUTResize)
