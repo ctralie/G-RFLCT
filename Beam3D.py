@@ -143,6 +143,8 @@ class Beam3D(object):
 				else:
 					print "WARNING: Beam focal point is in the plane of the defining face!!"
 					clippedVerts[i].z = 1e-5
+			#Store the original z position before projection onto image plane
+			clippedVerts[i].origZ = clippedVerts[i].z
 			clippedVerts[i].x = -self.neardist*clippedVerts[i].x/clippedVerts[i].z
 			clippedVerts[i].y = -self.neardist*clippedVerts[i].y/clippedVerts[i].z
 			clippedVerts[i].z = -self.neardist
@@ -187,16 +189,18 @@ class Beam3D(object):
 						if CCWE != 0:
 							#Only add the intersection if E is not on the clip edge
 							#(otherwise E gets added twice)
-							line1 = Line3D(clipEdge[0], clipEdge[1]-clipEdge[0])
-							line2 = Line3D(S, E-S)
-							intersection = line1.intersectOtherLine(line2)
-							if not intersection:
+							line1 = Line3D(S, E-S)
+							line2 = Line3D(clipEdge[0], clipEdge[1]-clipEdge[0])
+							ret = line1.intersectOtherLineRet_t(line2)
+							if not ret:
 								print "CCWE = %i, CCWS = %i"%(CCWE, CCWS)
 								print "EPS_S = %g"%getEPS(clipEdge[0], clipEdge[1], S)
 								print "EPS_E = %g"%getEPS(clipEdge[0], clipEdge[1], E)
 								print "1: Clip intersection not found: ClipEdge = [%s, %s], S = %s, E = %s"%(self.mvMatrixInverse*clipEdge[0], self.mvMatrixInverse*clipEdge[1], self.mvMatrixInverse*S, self.mvMatrixInverse*E)
 							else:
+								(t, intersection) = ret
 								intersection.clippedVertex = True
+								intersection.origZ = S.origZ + t*(E.origZ-S.origZ)
 								outputList.append(intersection)
 					outputList.append(E)
 				elif CCWS != 1:
@@ -204,16 +208,18 @@ class Beam3D(object):
 					if CCWS != 0:
 						#Only add intersection if S is not on the clip edge
 						#(otherwise it gets added twice since it's already been added)
-						line1 = Line3D(clipEdge[0], clipEdge[1]-clipEdge[0])
-						line2 = Line3D(S, E-S)
-						intersection = line1.intersectOtherLine(line2)
-						if not intersection:
+						line1 = Line3D(S, E-S)
+						line2 = Line3D(clipEdge[0], clipEdge[1]-clipEdge[0])
+						ret = line1.intersectOtherLineRet_t(line2)
+						if not ret:
 							print "CCWE = %i, CCWS = %i"%(CCWE, CCWS)
 							print "EPS_S = %g"%getEPS(clipEdge[0], clipEdge[1], S)
 							print "EPS_E = %g"%getEPS(clipEdge[0], clipEdge[1], E)
 							print "2: Clip intersection not found: ClipEdge = [%s, %s], S = %s, E = %s"%(self.mvMatrixInverse*clipEdge[0], self.mvMatrixInverse*clipEdge[1], self.mvMatrixInverse*S, self.mvMatrixInverse*E)
 						else:
+							(t, intersection) = ret
 							intersection.clippedVertex = True
+							intersection.origZ = S.origZ + t*(E.origZ-S.origZ)
 							outputList.append(intersection)
 				S = E
 		#for v in outputList:
@@ -237,7 +243,7 @@ class Beam3D(object):
 		#First find the faces that are actually within the beam
 		for face in faces:
 			clipped = self.clipMeshFace(face)
-			if len(clipped) > 0:
+			if len(clipped) > 2:
 				#Only consider the face if it is within the beam
 				validFaces.append((clipped, face))
 		if len(validFaces) == 0:
@@ -249,18 +255,18 @@ class Beam3D(object):
 		for i in range(0, len(validFaces)):
 			face = validFaces[i]
 			#Put the clipped coordinates of this face back into world
-			#coordinates and move them from the image plane back to
-			#their corresponding face before comparing them
-			vertices = [self.mvMatrixInverse*v for v in face[0]]
-			plane = face[1].getPlane()
-			for i in range(0, len(vertices)):
-				line = Line3D(self.origin, vertices[i] - self.origin)
-				v = line.intersectPlane(plane)
-				if not v:
-					print "ERROR: Unable to put face back into world coordinates"
-					print vertices[i] - self.origin
-				else:
-					vertices[i] = v[1]
+			#coordinates
+			vertices = []
+			for vOrig in face[0]:
+				v = vOrig.Copy()
+				#Undo the effect of projection
+				v.x = -v.x*vOrig.origZ/self.neardist
+				v.y = -v.y*vOrig.origZ/self.neardist
+				v.z = vOrig.origZ
+				#Put back into world coordinates
+				v = self.mvMatrixInverse*v
+				vertices.append(v)
+			
 			#Check "face" against the plane of every other valid face
 			faceInFront = True
 			for j in range(0, len(validFaces)):
@@ -276,7 +282,7 @@ class Beam3D(object):
 				plane = Plane3D(P0, normal)
 				#Check every clipped point of face against the plane of otherFace
 				for v in vertices:
-					if plane.distFromPlane(v) > 0:
+					if plane.distFromPlane(v) > EPS:
 						#One of the points of this face is behind the plane
 						#of another face
 						faceInFront = False
@@ -289,7 +295,23 @@ class Beam3D(object):
 		if not retFace:
 			print "Warning: Faces visible in beam but no face found in front"
 		return retFace
-	
+
+	#Dummy function that just returns the first face within the beam
+	#completely unclipped and with no visibility check
+	#Follows the same format as the above function
+	def findLargestUnobstructedFaceDummy(self, faces):
+		validFaces = []
+		#First find the faces that are actually within the beam
+		for face in faces:
+			clipped = self.clipMeshFace(face)
+			if len(clipped) > 2:
+				#Only consider the face if it is within the beam
+				validFaces.append((clipped, face))
+		if len(validFaces) == 0:
+			return None
+		self.visibleFaces = faces
+		return (validFaces[0][0], [v.pos for v in validFaces[0][1].getVertices()], validFaces[0][1])
+			
 	def drawPolygon(self, poly, minX, maxX, minY, maxY, dim):
 		border = 10
 		scaleX = float(dim - border*2)/(maxX - minX)
@@ -304,7 +326,8 @@ class Beam3D(object):
 			glVertex2f(border+(P.x-minX)*scaleX, border+(P.y-minY)*scaleY)
 		glEnd()
 	
-	def drawProjectedMeshFaces(self, faces, dim):
+	def drawProjectedMeshFaces(self, faces, dim, toggleDrawSplits):
+		glLineWidth(2)
 		glDisable(GL_LIGHTING)
 		glMatrixMode(GL_PROJECTION)
 		glLoadIdentity()
@@ -325,22 +348,26 @@ class Beam3D(object):
 		maxX = max([P.x for P in self.frustPoints])
 		minY = min([P.y for P in self.frustPoints])
 		maxY = max([P.y for P in self.frustPoints])
-		clippedFaces = [self.clipMeshFace(face) for face in faces]
-		glColor3f(0, 0, 1)
-		glPolygonMode(GL_FRONT_AND_BACK, GL_LINE)
-		for face in clippedFaces:
-			self.drawPolygon(face, minX, maxX, minY, maxY, dim)
 		glColor3f(1, 0, 0)
 		glPolygonMode(GL_FRONT_AND_BACK, GL_FILL)
 		faceInFront = self.findLargestUnobstructedFace(faces)
-		self.drawPolygon(faceInFront[0], minX, maxX, minY, maxY, dim)
-		subBeams = splitBeam(self, faceInFront[0])
-		subBeamPoints = [self.projectPolygon(subBeam) for subBeam in subBeams]
-		subBeamPoints = subBeams
-		glColor3f(0, 1, 0)
+		if faceInFront:
+			self.drawPolygon(faceInFront[0], minX, maxX, minY, maxY, dim)
+		glColor3f(0, 0, 0)
 		glPolygonMode(GL_FRONT_AND_BACK, GL_LINE)
-		for subBeam in subBeamPoints:
-			self.drawPolygon(subBeam, minX, maxX, minY, maxY, dim)
+		self.drawPolygon(self.frustPoints, minX, maxX, minY, maxY, dim)
+		if toggleDrawSplits:
+			if faceInFront:
+				glColor3f(0, 1, 0)
+				subBeams = splitBeam(self, faceInFront[0])
+				subBeamPoints = [self.projectPolygon(subBeam) for subBeam in subBeams]
+				for subBeam in subBeamPoints:
+					self.drawPolygon(subBeam, minX, maxX, minY, maxY, dim)
+		else:
+			glColor3f(0, 0, 1)
+			clippedFaces = [self.clipMeshFace(face) for face in faces]
+			for face in clippedFaces:
+				self.drawPolygon(face, minX, maxX, minY, maxY, dim)
 		glPolygonMode(GL_FRONT_AND_BACK, GL_FILL)
 		glEnable(GL_DEPTH_TEST)
 		glEnable(GL_LIGHTING)

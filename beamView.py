@@ -52,8 +52,10 @@ class Viewer(object):
 		
 		self.selectedFace = None
 		self.drawBeam = False
+		self.sceneTransparent = True
+		self.toggleDrawSplits = False
 		self.beamTrans = 0.3 #Beam transparency
-		self.beamTree = BeamTree(self.scene.Source, self.meshFaces, 1)
+		self.beamTree = BeamTree(self.scene.Source, self.meshFaces, 0)
 		
 		self.initGL()
 
@@ -87,7 +89,11 @@ class Viewer(object):
 			glLightfv(GL_LIGHT1, GL_POSITION,  [-3.0, -2.0, -3.0, 0.0]);
 		
 			glEnable(GL_LIGHTING)
-
+			
+			if self.sceneTransparent:
+				glDisable(GL_DEPTH_TEST)
+			else:
+				glEnable(GL_DEPTH_TEST)
 			self.scene.renderGL()
 			
 			if self.selectedFace:
@@ -132,13 +138,12 @@ class Viewer(object):
 				glEnd()
 				glDisable(GL_BLEND)
 				glEnable(GL_LIGHTING)
-		
-		
+			
 			#Next draw the 2D projection scene on the right
 			dim = self.pixWidth - 800
 			glViewport(800, 0, dim, dim)
 			glScissor(800, 0, dim, dim)
-			#self.beamTree.root.children[0].drawProjectedMeshFaces(self.meshFaces, dim)
+			self.beamTree.root.children[0].drawProjectedMeshFaces(self.meshFaces, dim, self.toggleDrawSplits)
 				
 			glutSwapBuffers()
 	
@@ -189,6 +194,10 @@ class Viewer(object):
 		self.keys[key] = False
 		if key == ' ':
 			self.drawBeam = not self.drawBeam
+		elif key in ['s', 'S']:
+			self.toggleDrawSplits = not self.toggleDrawSplits
+		elif key in ['t', 'T']:
+			self.sceneTransparent = not self.sceneTransparent
 		#if key in ['e', 'E']:
 		#	self.drawEdges = 1 - self.drawEdges
 		#elif key in ['v', 'V']:

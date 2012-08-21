@@ -101,6 +101,12 @@ class Point3D(object):
 	def Dot(self, other):
 		return self.x*other.x + self.y*other.y + self.z*other.z
 
+	def __mod__(self, other):
+		newX = self.y*other.z - other.y*self.z
+		newY = -self.x*other.z + other.x*self.z
+		newZ = self.x*other.y - other.x*self.y
+		return Vector3D(newX, newY, newZ)
+
 	def squaredMag(self):
 		return self.x**2.0 + self.y**2.0 + self.z**2.0
 	
@@ -286,7 +292,7 @@ class Line3D(object):
 		intersectP = P + t*V
 		return [t, intersectP]
 	
-	def intersectOtherLine(self, other):
+	def intersectOtherLineRet_t(self, other):
 		#P0 = Point3D(-2.5, 0, -2.5)
 		#V0 = Vector3D(-0, -0, -1)
 		#P1 = Point3D(-2.5, -2.5, 0)
@@ -318,7 +324,13 @@ class Line3D(object):
 		t = detNumt / detDenom
 		s = detNums / detDenom
 		#print "s = %g, t = %g"%(s, t)
-		return P0 + t*V0
+		return (t, P0 + t*V0)
+	
+	def intersectOtherLine(self, other):
+		ret = self.intersectOtherLineRet_t(other)
+		if ret:
+			return ret[1]
+		return None
 	
 	def __str__(self):
 		return "Line3D: %s + t%s"%(self.P0, self.V)

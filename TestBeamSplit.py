@@ -67,6 +67,7 @@ class Viewer(object):
 			poly = self.splitPolys[i]
 			color = float(i)/float(len(self.splitPolys))
 			glColor3f(color, color, color)
+			glPolygonMode(GL_FRONT_AND_BACK, GL_FILL)
 			glBegin(GL_POLYGON)
 			for P in poly:
 				glVertex2f(P.x, P.y)
