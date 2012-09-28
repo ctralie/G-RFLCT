@@ -144,7 +144,9 @@ class Viewer(object):
 			if not self.selectingBeam:
 				poly = self.polyPoints
 			if button == GLUT_LEFT_BUTTON:
-				poly.append(Point3D(x, y, 1))
+				P = Point3D(x, y, 1)
+				P.origZ = 1
+				poly.append(P)
 			elif button == GLUT_RIGHT_BUTTON:
 				if len(poly) > 0:
 					poly.pop()

@@ -6,10 +6,28 @@ from Cameras3D import *
 from OpenGL.GL import *
 import math
 
+#This helper function is used to print 2D polygons
+#as parallel lists of x and y coordinates
+#so that they can be used with the "patch" command
+#in Matlab
+def printMatlabPoly(poly, suffix = ""):
+	print "x%s = ["%suffix,
+	for i in range(0, len(poly)):
+		print poly[i].x,
+		if i < len(poly)-1:
+			print ",",
+	print "]"
+	print "y%s = ["%suffix,
+	for i in range(0, len(poly)):
+		print poly[i].y,
+		if i < len(poly)-1:
+			print ",",
+	print "]"
+
 #TODO: Update image sources pruning to make use of this class
 #Get the epsilon to be used for numerical precision
 def getEPS(A, B, C):
-	return 1e-7
+	return EPS
 	avgdx = (abs(A.x-B.x) + abs(A.x-C.x) + abs(B.x-C.x))/3.0
 	avgdy = (abs(A.y-B.y) + abs(A.y-C.y) + abs(B.y-C.y))/3.0
 	avgdz = (abs(A.z-B.z) + abs(A.z-C.z) + abs(B.z-C.z))/3.0
@@ -105,6 +123,8 @@ class Beam3D(object):
 		self.frustPoints = self.projectPolygon(frustVertices, False)
 	
 	#Project a polygon onto the beam's image plane (before clipping to frustum)
+	#Side effect: The field "origZ" is added to all point objects to store
+	#the original z coordinates before projection
 	def projectPolygon(self, polygon, doClip = True):
 		#First transform all points into the beam's field of view
 		mvVerts = [self.mvMatrix*v for v in polygon]
@@ -224,7 +244,12 @@ class Beam3D(object):
 				S = E
 		#for v in outputList:
 		#	print self.mvMatrixInverse*v
-		return outputList
+		#Check outputList to make sure no points are overlapping
+		ret = []
+		for i in range(0, len(outputList)):
+			if not PointsEqual2D(outputList[i], outputList[(i+1)%len(outputList)], EPS):
+				ret.append(outputList[i])
+		return ret
 	
 	def clipPolygon(self, poly):
 		ret = self.projectPolygon(poly)
@@ -260,8 +285,8 @@ class Beam3D(object):
 			for vOrig in face[0]:
 				v = vOrig.Copy()
 				#Undo the effect of projection
-				v.x = -v.x*vOrig.origZ/self.neardist
-				v.y = -v.y*vOrig.origZ/self.neardist
+				v.x = v.x*vOrig.origZ/self.neardist
+				v.y = v.y*vOrig.origZ/self.neardist
 				v.z = vOrig.origZ
 				#Put back into world coordinates
 				v = self.mvMatrixInverse*v
@@ -293,7 +318,7 @@ class Beam3D(object):
 					faceArea = area
 					retFace = (face[0], vertices, face[1])
 		if not retFace:
-			print "Warning: Faces visible in beam but no face found in front"
+			print "Warning: %i faces visible in beam but no face found in front"%len(validFaces)
 		return retFace
 
 	#Dummy function that just returns the first face within the beam
@@ -366,7 +391,11 @@ class Beam3D(object):
 		else:
 			glColor3f(0, 0, 1)
 			clippedFaces = [self.clipMeshFace(face) for face in faces]
-			for face in clippedFaces:
+			clippedFaces = [face for face in clippedFaces if len(face) > 2]
+			for i in range(0, len(clippedFaces)):
+				face = clippedFaces[i]
+				val = float(i)/float(len(clippedFaces))
+				glColor3f(val, val, val)
 				self.drawPolygon(face, minX, maxX, minY, maxY, dim)
 		glPolygonMode(GL_FRONT_AND_BACK, GL_FILL)
 		glEnable(GL_DEPTH_TEST)
@@ -556,15 +585,33 @@ class BeamTree(object):
 		frontBeam.children.append(reflectedBeam)
 		self.intersectBeam(reflectedBeam, self.allFaces, maxOrder)
 
-if __name__== '__main__':
-	tree = BeamTree(Point3D(0, 0, 0), [])
+#This main was used to debug numerical precision errors in Beam3D.clipToFrustum()
+if __name__ == '__main__':
+	facePoints = [Point3D(0.8, -1.25, -1.3), Point3D(0.8, -1.25, -1.2), Point3D(0.8, -0.27, -1.2), Point3D(0.8, -0.27, -1.3)]
+	origin = Point3D(0, 0, -2)
+	beamVerts = [v+origin for v in [Point3D(-1, -1, 1), Point3D(1, -1, 1), Point3D(1, 1, 1), Point3D(-1, 1, 1)]]
+	beam = Beam3D(origin, beamVerts)
+	printMatlabPoly(beam.frustPoints, "beam")
+	print "\n\n"
+	projected = beam.projectPolygon(facePoints)
+	printMatlabPoly(projected, "proj")
+	print "\n\n"
+	clipped = beam.clipPolygon(facePoints)
+	printMatlabPoly(clipped, "clip")
+	
+
+if __name__== '__main__1':
+	unitBox = getBoxMesh()
+	tree = BeamTree(Point3D(0, 0, 0), unitBox.faces[:], 1)
+
+if __name__ == '__main_2':
 	origin =  Point3D(-2.5, 2.5, -2)
 	frustPoints = [Point3D(1.25, 2.5, 2.5), Point3D(1.25, 2.5, -2.5), Point3D(3.75, 2.5, -2.5), Point3D(3.75, 2.5, 2.5)]
 	points = [Point3D(-4.5, -3.75, 0), Point3D(0.5, -3.75, 0), Point3D(0.5, -6.25, 0), Point3D(-4.5, -6.25, 0)]
 	beam = Beam3D(origin, frustPoints)
 	beam.clipPolygon(points)
 
-if __name__ == '__main__old':
+if __name__ == '__main__3':
 	mesh = getRectMesh(Point3D(-1, -1, -1), Point3D(-1, 1, -1), Point3D(0, 1, -1), Point3D(0, -1, -1))
 	beam = Beam3D(Point3D(0, 0, 0), [v.pos for v in mesh.faces[0].getVertices()], mesh.faces[0])
 	#poly = [Vector3D(-3, 0, 0), Vector3D(0, 0, 1), Vector3D(2, 0, 1), Vector3D(3, 0, 0), Vector3D(7, 0, -4), Vector3D(5, 0, -5), Vector3D(3, 0, -5), Vector3D(0, 0, -3)]

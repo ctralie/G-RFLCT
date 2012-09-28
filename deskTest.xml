@@ -1,0 +1,72 @@
+<EMScene>
+	<EMMaterials>
+		<material name = "reflective" R = "1.0" T = "0.0"/>
+		<material name = "absorptive" R = "0.0" T = "0.0"/>
+	</EMMaterials>
+	<OpticalMaterials>
+		<material name = "bluish" 
+			ka = "0.2 0.2 1"
+			kd = "0.5 0.5 1"
+			ks = "0.5 0.5 0.5"
+			kt = "0 0 0 "
+			emission = "0 0 0 "/>
+		<material name = "redish" 
+			ka = "1 0.2 0.2"
+			kd = "1 0.5 0.2"
+			ks = "0.5 0.5 0.5"
+			kt = "0 0 0 "
+			emission = "0 0 0 "/>
+	</OpticalMaterials>
+	<Source pos = "0 0 -2"/>
+	<Receiver pos = "0 0 2"/>
+	<box length = "5" width = "5" height = "2.5" center = "0 0 0">
+		1 0 0 0
+		0 1 0 0
+		0 0 1 0
+		0 0 0 1
+	</box>
+	<include filename = "table.xml">
+		2 0 0 -2
+		0 1 0 -1.25
+		0 0 1 -2
+		0 0 0 1
+	</include>
+	<!--<node>
+		1 0 0 0
+		0 1 0 0
+		0 0 1 0
+		0 0 0 1
+		<tri em = "reflective" P0 = "1 0 0" P1 = "1 0 1" P2 = "1 1 1"/>
+		<box width = "10" height = "20" length = "5"/>
+		<mesh filename="meshes/homer.off" om = "bluish">
+			1 0 0 0
+			0 1 0 0
+			0 0 1 0
+			0 0 0 1
+		</mesh>
+		<mesh filename="meshes/homer.off" om = "bluish">
+			1 0 0 -0.6
+			0 1 0 0
+			0 0 1 0
+			0 0 0 1
+		</mesh>
+		<node>
+			1 0 0 0
+			0 2 0 0
+			0 0 -1 -1
+			0 0 0 1
+			<mesh filename="meshes/homer.off" om = "bluish">
+				1 0 0 0
+				0 1 0 0
+				0 0 1 0
+				0 0 0 1
+			</mesh>
+			<mesh filename="meshes/homer.off" om = "redish">
+				1 0 0 -0.6
+				0 1 0 0
+				0 0 1 0
+				0 0 0 1
+			</mesh>
+		</node>
+	</node>!-->
+</EMScene>
