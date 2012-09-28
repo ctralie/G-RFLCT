@@ -411,6 +411,9 @@ class Beam3D(object):
 #split the beam around face into multiple convex regions
 #beam and face are both assumed to be on the image plane so
 #that convex splitting can occur in 2D
+#it is also assumed that "face" has already been clipped to the beam
+#The split beams are returned as a list of point lists, where
+#the frustum points are still in the beam's image plane coordinates
 def splitBeam(beam, face):
 	newBeams = []
 	beamPoints = [P.Copy() for P in beam.frustPoints]
@@ -494,9 +497,6 @@ def splitBeam(beam, face):
 		if not PointsEqual2D(cutBeamPoints[-1], leftIntersection, eps):
 			cutBeamPoints.append(leftIntersection)
 		beamPoints = cutBeamPoints
-	#Put the beams back into world coordinates now
-	matrix = beam.mvMatrix
-	newBeams = [[beam.mvMatrixInverse*P for P in newBeamPoints] for newBeamPoints in newBeams]
 	return newBeams
 		
 
@@ -551,11 +551,12 @@ class BeamTree(object):
 		
 		#Split the beam around the visible face into sub-parts of the same
 		#order and recursively split those sub-parts
-		matrix = beam.mvMatrixInverse
+		#NOTE: faceInFront[0] is the clipped and projected version of
+		#the face in front so it should match 
 		subBeams = splitBeam(beam, faceInFront[0])
 		print "There are %i subbeams"%len(subBeams)
 		for subBeamPoints in subBeams:
-			subBeamPoints = [matrix*P for P in subBeamPoints]
+			subBeamPoints = [beam.mvMatrixInverse*P for P in subBeamPoints]
 			subBeam = Beam3D(beam.origin, subBeamPoints, beam.parent, beam.order, beam.face)
 			#Since this is a split and not a reflection the split part has the same
 			#parent as "beam"

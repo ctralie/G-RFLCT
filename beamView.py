@@ -52,10 +52,11 @@ class Viewer(object):
 		
 		self.selectedFace = None
 		self.drawBeam = False
+		self.beamIndex = 0
 		self.sceneTransparent = True
 		self.toggleDrawSplits = False
 		self.beamTrans = 0.3 #Beam transparency
-		self.beamTree = BeamTree(self.scene.Source, self.meshFaces, 0)
+		self.beamTree = BeamTree(self.scene.Source, self.meshFaces, 1)
 		
 		self.initGL()
 
@@ -117,7 +118,7 @@ class Viewer(object):
 				glDisable(GL_LIGHTING)
 				glEnable(GL_BLEND)
 				glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA)
-				beam = self.beamTree.root.children[0]
+				beam = self.beamTree.root.children[self.beamIndex]
 				P0 = beam.origin
 				Points = [P0 + 5*(v-P0) for v in beam.frustVertices]
 				glColor4f(0, 1, 0, self.beamTrans)
@@ -143,7 +144,7 @@ class Viewer(object):
 			dim = self.pixWidth - 800
 			glViewport(800, 0, dim, dim)
 			glScissor(800, 0, dim, dim)
-			self.beamTree.root.children[0].drawProjectedMeshFaces(self.meshFaces, dim, self.toggleDrawSplits)
+			self.beamTree.root.children[self.beamIndex].drawProjectedMeshFaces(self.meshFaces, dim, self.toggleDrawSplits)
 				
 			glutSwapBuffers()
 	
@@ -198,6 +199,8 @@ class Viewer(object):
 			self.toggleDrawSplits = not self.toggleDrawSplits
 		elif key in ['t', 'T']:
 			self.sceneTransparent = not self.sceneTransparent
+		elif key in ['b', 'B']:
+			self.beamIndex = (self.beamIndex + 1)%len(self.beamTree.root.children)
 		#if key in ['e', 'E']:
 		#	self.drawEdges = 1 - self.drawEdges
 		#elif key in ['v', 'V']:
