@@ -120,7 +120,14 @@ class Viewer(object):
 				glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA)
 				beam = self.beamTree.root.children[self.beamIndex]
 				P0 = beam.origin
-				Points = [P0 + 5*(v-P0) for v in beam.frustVertices]
+				#Points = [P0 + 5*(v-P0) for v in beam.frustVertices]
+				Points = beam.frustVertices
+				#for i in range(0, len(Points)):
+				#	P = Points[i]
+				#	dV = P - P0
+				#	dV.normalize()
+				#	Points[i] = P0 + dV*5
+				
 				glColor4f(0, 1, 0, self.beamTrans)
 				glBegin(GL_TRIANGLES)
 				for i in range(0, len(Points)):
@@ -130,7 +137,12 @@ class Viewer(object):
 					glVertex3f(P1.x, P1.y, P1.z)
 					glVertex3f(P2.x, P2.y, P2.z)
 				glEnd()
-				glColor3f(0, 0, 1)
+				glColor3f(0, 1, 0)
+				glBegin(GL_POLYGON)
+				for P in Points:
+					glVertex3f(P.x, P.y, P.z)
+				glEnd()
+				glColor3f(0, 0, 0.3)
 				glLineWidth(5)
 				glBegin(GL_LINES)
 				for P in Points:

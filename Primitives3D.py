@@ -278,8 +278,7 @@ class Plane3D(object):
 class Line3D(object):
 	def __init__(self, P0, V):
 		self.P0 = P0
-		self.V = V.Copy()
-		self.V.Normalize()
+		self.V = V
 
 	def intersectPlane(self, plane):
 		P0 = plane.P0
@@ -317,7 +316,7 @@ class Line3D(object):
 		#print "[%g %g][t] = [%g]\n[%g %g][s]   [%g]"%(a, b, e, c, d, f)
 		detDenom = a*d - c*b
 		#Lines are parallel or skew
-		if detDenom == 0:
+		if abs(detDenom) < EPS:
 			return None
 		detNumt = e*d - b*f
 		detNums = a*f - c*e
@@ -467,7 +466,7 @@ def getFaceNormal(verts):
 		v1 = verts[i-1] - verts[0]
 		v2 = verts[i] - verts[0]
 		ret = v1 % v2
-		if ret.Length()/(v1.Length()*v2.Length()) > EPS:
+		if ret.Length()/(v1.Length()*v2.Length()) > 1e-10:
 			ret.normalize()
 			return ret
 	return None

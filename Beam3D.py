@@ -385,8 +385,7 @@ class Beam3D(object):
 			if faceInFront:
 				glColor3f(0, 1, 0)
 				subBeams = splitBeam(self, faceInFront[0])
-				subBeamPoints = [self.projectPolygon(subBeam) for subBeam in subBeams]
-				for subBeam in subBeamPoints:
+				for subBeam in subBeams:
 					self.drawPolygon(subBeam, minX, maxX, minY, maxY, dim)
 		else:
 			glColor3f(0, 0, 1)
@@ -417,6 +416,8 @@ class Beam3D(object):
 def splitBeam(beam, face):
 	newBeams = []
 	beamPoints = [P.Copy() for P in beam.frustPoints]
+	for i in range(0, len(beamPoints)):
+		beamPoints[i].origZ = beam.frustPoints[i].origZ
 	for i in range(0, len(face)):
 		#Step 1: Figure out where the line constructed from
 		#this face segment intersects the remaining part of the beam
@@ -443,8 +444,11 @@ def splitBeam(beam, face):
 			if leftIntersection and rightIntersection:
 				break
 			beamLine = Line3D(bP1, bP2-bP1)
-			intersection = beamLine.intersectOtherLine(faceLine)
-			if intersection:
+			ret = beamLine.intersectOtherLineRet_t(faceLine)
+			if ret:
+				(t, intersection) = ret
+				intersection.origZ = bP1.origZ + t*(bP2.origZ - bP1.origZ)
+				#print "intersection.origZ = %g, t = %g\nbeamLine = %s\nfaceLine = %s\n\n"%(intersection.origZ, t, beamLine, faceLine)
 				#If the intersection is actually within the segment
 				if CCW2D(bP1, bP2, intersection) == 0:
 					#Left intersection
@@ -460,11 +464,11 @@ def splitBeam(beam, face):
 		#Step 2: Figure out the polygon that's formed between the line
 		#from this face segment and the convex section of the beam it cuts off
 		if leftBeamIndex == -1 or rightBeamIndex == -1:
-			print "ERROR: Not all interesections were found while trying to split beam"
-			if leftBeamIndex == -1:
-				print "ERROR: No left intersection found while trying to split beam"
-			if rightBeamIndex == -1:
-				print "ERROR: No right intersection found while trying to split beam"
+			#print "ERROR: Not all interesections were found while trying to split beam"
+			#if leftBeamIndex == -1:
+			#	print "ERROR: No left intersection found while trying to split beam"
+			#if rightBeamIndex == -1:
+			#	print "ERROR: No right intersection found while trying to split beam"
 			continue
 		if leftBeamIndex == rightBeamIndex:
 			continue
@@ -554,9 +558,13 @@ class BeamTree(object):
 		#NOTE: faceInFront[0] is the clipped and projected version of
 		#the face in front so it should match 
 		subBeams = splitBeam(beam, faceInFront[0])
-		print "There are %i subbeams"%len(subBeams)
+		print "There are %i beams split around the front face"%len(subBeams)
 		for subBeamPoints in subBeams:
 			subBeamPoints = [beam.mvMatrixInverse*P for P in subBeamPoints]
+			print "[",
+			for P in subBeamPoints:
+				print "%g,"%P.z,
+			print "]"
 			subBeam = Beam3D(beam.origin, subBeamPoints, beam.parent, beam.order, beam.face)
 			#Since this is a split and not a reflection the split part has the same
 			#parent as "beam"
@@ -576,6 +584,11 @@ class BeamTree(object):
 		#no longer relevant and has been split into a bunch of pieces
 		#TODO: Make removing more efficient
 		beam.parent.children.remove(beam)
+		
+		print "There are %i subbeams"%len(beam.parent.children)
+		
+		return
+		
 		#Now add the reflected beam as a child of the split front beam
 		faceNormal = getFaceNormal(facePoints)
 		dV = beam.origin - facePoints[0]
