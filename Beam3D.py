@@ -86,6 +86,7 @@ def CCW2D(A, B, C):
 #the origin and is heading towards its first boundary; order 1 means the beam
 #has reflected off of one face already
 #dummy: Used to construct the root of the beam tree
+#freeBeam: True if this beam is not associated with a face, false otherwise
 class Beam3D(object):
 	def __init__(self, origin, frustVertices, parent = None, order = 0, face = None, dummy = False):
 		self.dummy = dummy
@@ -96,7 +97,7 @@ class Beam3D(object):
 		if dummy:
 			return
 		self.frustVertices = frustVertices
-		self.neardist = 0.01
+		self.neardist = 1.0
 		self.face = face
 		if len(frustVertices) < 3:
 			print "ERROR: Only %i frustVertices on beam projection face"%len(frustVertices)
@@ -116,9 +117,11 @@ class Beam3D(object):
 		self.mvMatrix = getCameraMatrix(self.towards, self.up, self.right, self.origin)
 		self.mvMatrixInverse = self.mvMatrix.Inverse()
 		#Now calculate the near distance if the beam is associated with a face
+		self.freeBeam = True
 		if face:
 			P = self.mvMatrix*frustVertices[0]
 			self.neardist = -P.z
+			self.freeBeam = False
 		#Now map the frustum points to 2D image plane coordinates
 		self.frustPoints = self.projectPolygon(frustVertices, False)
 	
@@ -132,23 +135,29 @@ class Beam3D(object):
 		clippedVerts = mvVerts
 		if doClip:
 			clippedVerts = []
+			#If it's a free beam, just clip everything behind as close
+			#to the vertex of the beam as possible
+			clipDist = EPS
+			if not self.freeBeam:
+				#Otherwise, clip to the face
+				clipDist = self.nearDist
 			for i in range(0, len(mvVerts)):
 				v1 = mvVerts[i]
 				v2 = mvVerts[(i+1)%len(mvVerts)]
 				(d1, d2) = (-v1.z, -v2.z)
-				#v1 is behind plane and v2 is in front of plane
-				if d1 < self.neardist and d2 >= self.neardist:
-					ratio = (self.neardist-d1)/(d2-d1)
-					vNew = Vector3D(v1.x+(v2.x-v1.x)*ratio, v1.y+(v2.y-v1.y)*ratio, -self.neardist)
+				#v1 is behind the beam and v2 is in front of the beam
+				if d1 < clipDist and d2 >= clipDist:
+					ratio = (clipDist-d1)/(d2-d1)
+					vNew = Vector3D(v1.x+(v2.x-v1.x)*ratio, v1.y+(v2.y-v1.y)*ratio, -clipDist)
 					clippedVerts.append(vNew)
 				#v1 is in front of plane and v2 is behind plane
-				elif d1 >= self.neardist and d2 < self.neardist:
-					ratio = (self.neardist-d2)/(d1 - d2)
-					vNew = Vector3D(v2.x+(v1.x-v2.x)*ratio, v2.y+(v1.y-v2.y)*ratio, -self.neardist)
+				elif d1 >= clipDist and d2 < clipDist:
+					ratio = (clipDist-d2)/(d1 - d2)
+					vNew = Vector3D(v2.x+(v1.x-v2.x)*ratio, v2.y+(v1.y-v2.y)*ratio, -clipDist)
 					clippedVerts.append(v1)
 					clippedVerts.append(vNew)
 				#Both vertices are in front of the plane
-				elif d1 >= self.neardist and d2 >= self.neardist:
+				elif d1 >= clipDist and d2 >= clipDist:
 					#Just add the left one
 					clippedVerts.append(v1)
 				#Otherwise two vertices are behind
@@ -262,8 +271,10 @@ class Beam3D(object):
 	#the point of view of this beam
 	#Faces contains a list of MeshFace objects to be clipped against this beam
 	#Returns a tuple (projected and clipped vertices, clipped vertices back on face plane, face object)
+	#backProjectedFaces is a by-reference array for storing the clipped faces back
+	#in world coordinates
 	#Side effects: adds the field "visibleFaces" to the beam
-	def findLargestUnobstructedFace(self, faces):
+	def findLargestUnobstructedFace(self, faces, backProjectedFaces = []):
 		validFaces = []
 		#First find the faces that are actually within the beam
 		for face in faces:
@@ -271,6 +282,8 @@ class Beam3D(object):
 			if len(clipped) > 2:
 				#Only consider the face if it is within the beam
 				validFaces.append((clipped, face))
+				for P in clipped:
+					print P.origZ
 		if len(validFaces) == 0:
 			return None
 		#Stores the visible faces to save work for split beams
@@ -291,6 +304,7 @@ class Beam3D(object):
 				#Put back into world coordinates
 				v = self.mvMatrixInverse*v
 				vertices.append(v)
+			backProjectedFaces.append(vertices)
 			
 			#Check "face" against the plane of every other valid face
 			faceInFront = True

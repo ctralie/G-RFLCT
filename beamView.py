@@ -149,6 +149,21 @@ class Viewer(object):
 					glVertex3f(P0.x, P0.y, P0.z)
 					glVertex3f(P.x, P.y, P.z)
 				glEnd()
+				
+				#Draw clipped faces within the beam back in world coordinates
+				backProjectedFaces = []
+				self.beamTree.root.children[self.beamIndex].findLargestUnobstructedFace(self.meshFaces, backProjectedFaces)
+				glColor3f(1, 0, 0)
+				glLineWidth(3)
+				for face in backProjectedFaces:
+					glBegin(GL_LINES)
+					for i in range(0, len(face)):
+						P1 = face[i]
+						P2 = face[(i+1)%len(face)]
+						glVertex3f(P1.x, P1.y, P1.z)
+						glVertex3f(P2.x, P2.y, P2.z)
+					glEnd()
+				
 				glDisable(GL_BLEND)
 				glEnable(GL_LIGHTING)
 			
