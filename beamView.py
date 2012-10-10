@@ -10,7 +10,7 @@ from Beam3D import *
 import Image
 from sys import argv
 
-DRAW_BACKPROJECTED = False
+DRAW_BACKPROJECTED = True
 
 def splitIntoRGBA(val):
 	A = (0xff000000&val)>>24

@@ -169,7 +169,6 @@ class Beam3D(object):
 					print "WARNING: Beam focal point is in the plane of the defining face!!"
 					clippedVerts[i].z = 1e-5
 			#Store the original z position before projection onto image plane
-			clippedVerts[i].origZ = clippedVerts[i].z
 			clippedVerts[i].x = -self.neardist*clippedVerts[i].x/clippedVerts[i].z
 			clippedVerts[i].y = -self.neardist*clippedVerts[i].y/clippedVerts[i].z
 			clippedVerts[i].z = -clipDist
@@ -214,8 +213,11 @@ class Beam3D(object):
 						if CCWE != 0:
 							#Only add the intersection if E is not on the clip edge
 							#(otherwise E gets added twice)
-							line1 = Line3D(S, E-S)
-							line2 = Line3D(clipEdge[0], clipEdge[1]-clipEdge[0])
+							#NOTE: Make line1 the line from which the intersection point is calculated
+							#since it is a line created from the beam, which is known to have certain
+							#numerical precision guarantees
+							line1 = Line3D(clipEdge[0], clipEdge[1]-clipEdge[0])
+							line2 = Line3D(S, E-S)
 							ret = line1.intersectOtherLineRet_t(line2)
 							if not ret:
 								print "CCWE = %i, CCWS = %i"%(CCWE, CCWS)
@@ -224,23 +226,16 @@ class Beam3D(object):
 								print "1: Clip intersection not found: ClipEdge = [%s, %s], S = %s, E = %s"%(self.mvMatrixInverse*clipEdge[0], self.mvMatrixInverse*clipEdge[1], self.mvMatrixInverse*S, self.mvMatrixInverse*E)
 							else:
 								(t, intersection) = ret
-								print "Outside to inside t=%g, %s to %s"%(t, S, E)
 								intersection.clippedVertex = True
-								intersection.origZ = S.origZ + t*(E.origZ-S.origZ)
 								outputList.append(intersection)
-								#print "intersection.origZ = %g, t = %g\nline1 = %s\nline2 = %s\n\n"%(intersection.origZ, t, line1, line2)
-								#print "t = %g"%t
-								#print "E.x = %g, intersection.x = %g, S.x = %g"%(E.x, intersection.x, S.x)
-								#print "E.y = %g, intersection.y = %g, S.y = %g"%(E.y, intersection.y, S.y)
-								#print "E.oZ = %g, intersection.oZ = %g, S.oZ = %g"%(E.origZ, intersection.origZ, S.origZ)
 					outputList.append(E)
 				elif CCWS != 1:
 					#Polygon going from inside to outside
 					if CCWS != 0:
 						#Only add intersection if S is not on the clip edge
 						#(otherwise it gets added twice since it's already been added)
-						line1 = Line3D(S, E-S)
-						line2 = Line3D(clipEdge[0], clipEdge[1]-clipEdge[0])
+						line1 = Line3D(clipEdge[0], clipEdge[1]-clipEdge[0])
+						line2 = Line3D(S, E-S)
 						ret = line1.intersectOtherLineRet_t(line2)
 						if not ret:
 							print "CCWE = %i, CCWS = %i"%(CCWE, CCWS)
@@ -249,9 +244,7 @@ class Beam3D(object):
 							print "2: Clip intersection not found: ClipEdge = [%s, %s], S = %s, E = %s"%(self.mvMatrixInverse*clipEdge[0], self.mvMatrixInverse*clipEdge[1], self.mvMatrixInverse*S, self.mvMatrixInverse*E)
 						else:
 							(t, intersection) = ret
-							print "Inside to outside t=%g, %s to %s"%(t, S, E)
 							intersection.clippedVertex = True
-							intersection.origZ = S.origZ + t*(E.origZ-S.origZ)
 							outputList.append(intersection)
 				S = E
 		#for v in outputList:
@@ -272,6 +265,30 @@ class Beam3D(object):
 	
 	def clipMeshFace(self, face):
 		return self.clipPolygon([v.pos for v in face.getVertices()])
+	
+	#Put a face that has been clipped to the beam back into world coordinates
+	#by casting rays through the clipped vertices in the image plane
+	#and intersecting them with the face in world coordinates
+	#clipped: a list of clipped points
+	#face: a MeshFace object representing the face in world coordinates
+	def projectBackClippedFace(self, clipped, face):
+		#NOTE: Can do ray intersect plane instead of ray intersect face
+		#because the rays are known to reside inside of the bounds of the 
+		#face due to the nature of the clipping algorithm
+		plane = face.getPlane()
+		vertices = []
+		for vOrig in clipped:
+			v = vOrig.Copy()
+			v = self.mvMatrixInverse*v
+			line = Line3D(self.origin, v-self.origin)
+			intersection = line.intersectPlane(plane)
+			if intersection:
+				vertices.append(intersection[1])
+			else:
+				print "ERROR: Unable to find intersected point on face"
+				print vOrig
+				print ray
+		return vertices	
 	
 	#Purpose: Return the largest face that is completely unobstructed from
 	#the point of view of this beam
@@ -298,18 +315,8 @@ class Beam3D(object):
 			face = validFaces[i]
 			#Put the clipped coordinates of this face back into world
 			#coordinates
-			vertices = []
-			for vOrig in face[0]:
-				v = vOrig.Copy()
-				#Undo the effect of projection
-				v.x = -v.x*vOrig.origZ/self.neardist
-				v.y = -v.y*vOrig.origZ/self.neardist
-				v.z = vOrig.origZ
-				#Put back into world coordinates
-				v = self.mvMatrixInverse*v
-				vertices.append(v)
+			vertices = self.projectBackClippedFace(face[0], face[1])
 			backProjectedFaces.append(vertices)
-			
 			#Check "face" against the plane of every other valid face
 			faceInFront = True
 			for j in range(0, len(validFaces)):
@@ -338,22 +345,6 @@ class Beam3D(object):
 		if not retFace:
 			print "Warning: %i faces visible in beam but no face found in front"%len(validFaces)
 		return retFace
-
-	#Dummy function that just returns the first face within the beam
-	#completely unclipped and with no visibility check
-	#Follows the same format as the above function
-	def findLargestUnobstructedFaceDummy(self, faces):
-		validFaces = []
-		#First find the faces that are actually within the beam
-		for face in faces:
-			clipped = self.clipMeshFace(face)
-			if len(clipped) > 2:
-				#Only consider the face if it is within the beam
-				validFaces.append((clipped, face))
-		if len(validFaces) == 0:
-			return None
-		self.visibleFaces = faces
-		return (validFaces[0][0], [v.pos for v in validFaces[0][1].getVertices()], validFaces[0][1])
 			
 	def drawPolygon(self, poly, minX, maxX, minY, maxY, dim):
 		border = 10
@@ -435,8 +426,6 @@ class Beam3D(object):
 def splitBeam(beam, face):
 	newBeams = []
 	beamPoints = [P.Copy() for P in beam.frustPoints]
-	for i in range(0, len(beamPoints)):
-		beamPoints[i].origZ = beam.frustPoints[i].origZ
 	for i in range(0, len(face)):
 		#Step 1: Figure out where the line constructed from
 		#this face segment intersects the remaining part of the beam
@@ -466,8 +455,6 @@ def splitBeam(beam, face):
 			ret = beamLine.intersectOtherLineRet_t(faceLine)
 			if ret:
 				(t, intersection) = ret
-				intersection.origZ = bP1.origZ + t*(bP2.origZ - bP1.origZ)
-				#print "intersection.origZ = %g, t = %g\nbeamLine = %s\nfaceLine = %s\n\n"%(intersection.origZ, t, beamLine, faceLine)
 				#If the intersection is actually within the segment
 				if CCW2D(bP1, bP2, intersection) == 0:
 					#Left intersection
@@ -588,7 +575,7 @@ class BeamTree(object):
 			#Since this is a split and not a reflection the split part has the same
 			#parent as "beam"
 			beam.parent.children.append(subBeam)
-			#self.intersectBeam(subBeam, beam.visibleFaces, maxOrder)
+			self.intersectBeam(subBeam, beam.visibleFaces, maxOrder)
 		
 		#Now Reflect the beam across this face and recursively intersect
 		#that beam which has an order of +1
@@ -603,10 +590,6 @@ class BeamTree(object):
 		#no longer relevant and has been split into a bunch of pieces
 		#TODO: Make removing more efficient
 		beam.parent.children.remove(beam)
-		
-		print "There are %i subbeams"%len(beam.parent.children)
-		
-		return
 		
 		#Now add the reflected beam as a child of the split front beam
 		faceNormal = getFaceNormal(facePoints)
@@ -626,39 +609,29 @@ if __name__ == '__main__':
 	frustVertices = [v+origin for v in [Point3D(-1, -1, 1), Point3D(1, -1, 1), Point3D(1, 1, 1), Point3D(-1, 1, 1)]]
 	beam = Beam3D(origin, frustVertices)
 	faceVertices = [Point3D(-2, -2, -4), Point3D(-2, -2, 4), Point3D(-2, 2, 4), Point3D(-2, 2, -4)]
+	mesh = PolyMesh()
+	meshVertices = []
+	for V in faceVertices:
+		meshVertices.append(mesh.addVertex(V))
+	mesh.addFace(meshVertices)
 	projected = beam.projectPolygon(faceVertices)
 	print "PROJECTED POLYGON POINTS"
 	for P in projected:
-		print "%s, %i"%(P, P.origZ)
+		print "%s"%(P)
 	print "\nFRUSTUM POINTS:"
 	for P in beam.frustPoints:
 		print P
 	clipped = beam.clipToFrustum(projected)
 	print "\nCLIPPED POINTS"
 	for P in clipped:
-		print "%s, %i"%(P, P.origZ)
+		print "%s"%(P)
+	print "\nPOINTS PROJECTED BACK"
+	projectedBack = beam.projectBackClippedFace(clipped, mesh.faces[0])
+	for P in projectedBack:
+		print P
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+######################################################
 
 #This main was used to debug numerical precision errors in Beam3D.clipToFrustum()
 if __name__ == '__main__4':
