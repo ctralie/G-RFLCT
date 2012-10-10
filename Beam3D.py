@@ -79,7 +79,8 @@ def CCW2D(A, B, C):
 #Otherwise, the beam it is one of the initial cast beams and has not 
 #reflected across a face yet. In that case the default neardist can be used
 #Other member variables: 
-#mvMatrix: Modelview matrix for putting in the coordinate system of a beam
+#mvMatrix: Modelview matrix for putting a point into the coordinate system of a beam
+#mvMatrixInverse: Takes a point from the beam's coordinates back into world coordinates
 #frustPoints: Points of the frustum on the 2D image plane
 #parent: The parent beam
 #order: The "depth" of the beam; e.g. order 0 means this beam started at
@@ -97,7 +98,7 @@ class Beam3D(object):
 		if dummy:
 			return
 		self.frustVertices = frustVertices
-		self.neardist = 1.0
+		self.neardist = 0.01
 		self.face = face
 		if len(frustVertices) < 3:
 			print "ERROR: Only %i frustVertices on beam projection face"%len(frustVertices)
@@ -133,14 +134,9 @@ class Beam3D(object):
 		mvVerts = [self.mvMatrix*v for v in polygon]
 		#Now clip the polygon to the near plane
 		clippedVerts = mvVerts
+		clipDist = self.neardist
 		if doClip:
 			clippedVerts = []
-			#If it's a free beam, just clip everything behind as close
-			#to the vertex of the beam as possible
-			clipDist = EPS
-			if not self.freeBeam:
-				#Otherwise, clip to the face
-				clipDist = self.nearDist
 			for i in range(0, len(mvVerts)):
 				v1 = mvVerts[i]
 				v2 = mvVerts[(i+1)%len(mvVerts)]
@@ -148,15 +144,15 @@ class Beam3D(object):
 				#v1 is behind the beam and v2 is in front of the beam
 				if d1 < clipDist and d2 >= clipDist:
 					ratio = (clipDist-d1)/(d2-d1)
-					vNew = Vector3D(v1.x+(v2.x-v1.x)*ratio, v1.y+(v2.y-v1.y)*ratio, -clipDist)
+					vNew = Point3D(v1.x+(v2.x-v1.x)*ratio, v1.y+(v2.y-v1.y)*ratio, -clipDist)
 					clippedVerts.append(vNew)
-				#v1 is in front of plane and v2 is behind plane
+				#v1 is in front of beam and v2 is behind beam
 				elif d1 >= clipDist and d2 < clipDist:
 					ratio = (clipDist-d2)/(d1 - d2)
-					vNew = Vector3D(v2.x+(v1.x-v2.x)*ratio, v2.y+(v1.y-v2.y)*ratio, -clipDist)
+					vNew = Point3D(v2.x+(v1.x-v2.x)*ratio, v2.y+(v1.y-v2.y)*ratio, -clipDist)
 					clippedVerts.append(v1)
 					clippedVerts.append(vNew)
-				#Both vertices are in front of the plane
+				#Both vertices are in front of the beam
 				elif d1 >= clipDist and d2 >= clipDist:
 					#Just add the left one
 					clippedVerts.append(v1)
@@ -166,7 +162,7 @@ class Beam3D(object):
 		#	print self.mvMatrixInverse*v
 		#Now do the perspective projection
 		for i in range(0, len(clippedVerts)):
-			if clippedVerts[i].z == 0:
+			if clippedVerts[i].z >= 0:
 				if doClip:
 					print "ERROR: Near clipping did not work properly"
 				else:
@@ -176,7 +172,7 @@ class Beam3D(object):
 			clippedVerts[i].origZ = clippedVerts[i].z
 			clippedVerts[i].x = -self.neardist*clippedVerts[i].x/clippedVerts[i].z
 			clippedVerts[i].y = -self.neardist*clippedVerts[i].y/clippedVerts[i].z
-			clippedVerts[i].z = -self.neardist
+			clippedVerts[i].z = -clipDist
 		#Make sure the points are in counter clockwise order
 		for i in range(0, len(clippedVerts)-2):
 			P0 = clippedVerts[i]
@@ -228,9 +224,15 @@ class Beam3D(object):
 								print "1: Clip intersection not found: ClipEdge = [%s, %s], S = %s, E = %s"%(self.mvMatrixInverse*clipEdge[0], self.mvMatrixInverse*clipEdge[1], self.mvMatrixInverse*S, self.mvMatrixInverse*E)
 							else:
 								(t, intersection) = ret
+								print "Outside to inside t=%g, %s to %s"%(t, S, E)
 								intersection.clippedVertex = True
 								intersection.origZ = S.origZ + t*(E.origZ-S.origZ)
 								outputList.append(intersection)
+								#print "intersection.origZ = %g, t = %g\nline1 = %s\nline2 = %s\n\n"%(intersection.origZ, t, line1, line2)
+								#print "t = %g"%t
+								#print "E.x = %g, intersection.x = %g, S.x = %g"%(E.x, intersection.x, S.x)
+								#print "E.y = %g, intersection.y = %g, S.y = %g"%(E.y, intersection.y, S.y)
+								#print "E.oZ = %g, intersection.oZ = %g, S.oZ = %g"%(E.origZ, intersection.origZ, S.origZ)
 					outputList.append(E)
 				elif CCWS != 1:
 					#Polygon going from inside to outside
@@ -247,6 +249,7 @@ class Beam3D(object):
 							print "2: Clip intersection not found: ClipEdge = [%s, %s], S = %s, E = %s"%(self.mvMatrixInverse*clipEdge[0], self.mvMatrixInverse*clipEdge[1], self.mvMatrixInverse*S, self.mvMatrixInverse*E)
 						else:
 							(t, intersection) = ret
+							print "Inside to outside t=%g, %s to %s"%(t, S, E)
 							intersection.clippedVertex = True
 							intersection.origZ = S.origZ + t*(E.origZ-S.origZ)
 							outputList.append(intersection)
@@ -263,6 +266,9 @@ class Beam3D(object):
 	def clipPolygon(self, poly):
 		ret = self.projectPolygon(poly)
 		return self.clipToFrustum(ret)
+	
+	def projectMeshFace(self, face):
+		return self.projectPolygon([v.pos for v in face.getVertices()])
 	
 	def clipMeshFace(self, face):
 		return self.clipPolygon([v.pos for v in face.getVertices()])
@@ -282,8 +288,6 @@ class Beam3D(object):
 			if len(clipped) > 2:
 				#Only consider the face if it is within the beam
 				validFaces.append((clipped, face))
-				for P in clipped:
-					print P.origZ
 		if len(validFaces) == 0:
 			return None
 		#Stores the visible faces to save work for split beams
@@ -298,8 +302,8 @@ class Beam3D(object):
 			for vOrig in face[0]:
 				v = vOrig.Copy()
 				#Undo the effect of projection
-				v.x = v.x*vOrig.origZ/self.neardist
-				v.y = v.y*vOrig.origZ/self.neardist
+				v.x = -v.x*vOrig.origZ/self.neardist
+				v.y = -v.y*vOrig.origZ/self.neardist
 				v.z = vOrig.origZ
 				#Put back into world coordinates
 				v = self.mvMatrixInverse*v
@@ -409,6 +413,7 @@ class Beam3D(object):
 				face = clippedFaces[i]
 				val = float(i)/float(len(clippedFaces))
 				glColor3f(val, val, val)
+				glColor3f(0, 0, 0)
 				self.drawPolygon(face, minX, maxX, minY, maxY, dim)
 		glPolygonMode(GL_FRONT_AND_BACK, GL_FILL)
 		glEnable(GL_DEPTH_TEST)
@@ -572,18 +577,18 @@ class BeamTree(object):
 		#NOTE: faceInFront[0] is the clipped and projected version of
 		#the face in front so it should match 
 		subBeams = splitBeam(beam, faceInFront[0])
-		print "There are %i beams split around the front face"%len(subBeams)
+		#print "There are %i beams split around the front face"%len(subBeams)
 		for subBeamPoints in subBeams:
 			subBeamPoints = [beam.mvMatrixInverse*P for P in subBeamPoints]
-			print "[",
-			for P in subBeamPoints:
-				print "%g,"%P.z,
-			print "]"
+			#print "[",
+			#for P in subBeamPoints:
+			#	print "%g,"%P.z,
+			#print "]"
 			subBeam = Beam3D(beam.origin, subBeamPoints, beam.parent, beam.order, beam.face)
 			#Since this is a split and not a reflection the split part has the same
 			#parent as "beam"
 			beam.parent.children.append(subBeam)
-			self.intersectBeam(subBeam, beam.visibleFaces, maxOrder)
+			#self.intersectBeam(subBeam, beam.visibleFaces, maxOrder)
 		
 		#Now Reflect the beam across this face and recursively intersect
 		#that beam which has an order of +1
@@ -613,8 +618,50 @@ class BeamTree(object):
 		frontBeam.children.append(reflectedBeam)
 		self.intersectBeam(reflectedBeam, self.allFaces, maxOrder)
 
-#This main was used to debug numerical precision errors in Beam3D.clipToFrustum()
+
+#Test a simple beam projection and split case
 if __name__ == '__main__':
+	#Simple beam projection and splitting test for debugging
+	origin = Point3D(0, 0, -2)
+	frustVertices = [v+origin for v in [Point3D(-1, -1, 1), Point3D(1, -1, 1), Point3D(1, 1, 1), Point3D(-1, 1, 1)]]
+	beam = Beam3D(origin, frustVertices)
+	faceVertices = [Point3D(-2, -2, -4), Point3D(-2, -2, 4), Point3D(-2, 2, 4), Point3D(-2, 2, -4)]
+	projected = beam.projectPolygon(faceVertices)
+	print "PROJECTED POLYGON POINTS"
+	for P in projected:
+		print "%s, %i"%(P, P.origZ)
+	print "\nFRUSTUM POINTS:"
+	for P in beam.frustPoints:
+		print P
+	clipped = beam.clipToFrustum(projected)
+	print "\nCLIPPED POINTS"
+	for P in clipped:
+		print "%s, %i"%(P, P.origZ)
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+#This main was used to debug numerical precision errors in Beam3D.clipToFrustum()
+if __name__ == '__main__4':
 	facePoints = [Point3D(0.8, -1.25, -1.3), Point3D(0.8, -1.25, -1.2), Point3D(0.8, -0.27, -1.2), Point3D(0.8, -0.27, -1.3)]
 	origin = Point3D(0, 0, -2)
 	beamVerts = [v+origin for v in [Point3D(-1, -1, 1), Point3D(1, -1, 1), Point3D(1, 1, 1), Point3D(-1, 1, 1)]]
@@ -631,6 +678,7 @@ if __name__ == '__main__':
 if __name__== '__main__1':
 	unitBox = getBoxMesh()
 	tree = BeamTree(Point3D(0, 0, 0), unitBox.faces[:], 1)
+
 
 if __name__ == '__main_2':
 	origin =  Point3D(-2.5, 2.5, -2)

@@ -10,6 +10,8 @@ from Beam3D import *
 import Image
 from sys import argv
 
+DRAW_BACKPROJECTED = False
+
 def splitIntoRGBA(val):
 	A = (0xff000000&val)>>24
 	R = (0x00ff0000&val)>>16
@@ -56,7 +58,7 @@ class Viewer(object):
 		self.sceneTransparent = True
 		self.toggleDrawSplits = False
 		self.beamTrans = 0.3 #Beam transparency
-		self.beamTree = BeamTree(self.scene.Source, self.meshFaces, 1)
+		self.beamTree = BeamTree(self.scene.Source, self.meshFaces, 0)
 		
 		self.initGL()
 
@@ -122,11 +124,11 @@ class Viewer(object):
 				P0 = beam.origin
 				#Points = [P0 + 5*(v-P0) for v in beam.frustVertices]
 				Points = beam.frustVertices
-				#for i in range(0, len(Points)):
-				#	P = Points[i]
-				#	dV = P - P0
-				#	dV.normalize()
-				#	Points[i] = P0 + dV*5
+				for i in range(0, len(Points)):
+					P = Points[i]
+					dV = P - P0
+					dV.normalize()
+					Points[i] = P0 + dV*5
 				
 				glColor4f(0, 1, 0, self.beamTrans)
 				glBegin(GL_TRIANGLES)
@@ -151,18 +153,19 @@ class Viewer(object):
 				glEnd()
 				
 				#Draw clipped faces within the beam back in world coordinates
-				backProjectedFaces = []
-				self.beamTree.root.children[self.beamIndex].findLargestUnobstructedFace(self.meshFaces, backProjectedFaces)
-				glColor3f(1, 0, 0)
-				glLineWidth(3)
-				for face in backProjectedFaces:
-					glBegin(GL_LINES)
-					for i in range(0, len(face)):
-						P1 = face[i]
-						P2 = face[(i+1)%len(face)]
-						glVertex3f(P1.x, P1.y, P1.z)
-						glVertex3f(P2.x, P2.y, P2.z)
-					glEnd()
+				if DRAW_BACKPROJECTED:
+					backProjectedFaces = []
+					self.beamTree.root.children[self.beamIndex].findLargestUnobstructedFace(self.meshFaces, backProjectedFaces)
+					glColor3f(1, 0, 0)
+					glLineWidth(3)
+					for face in backProjectedFaces:
+						glBegin(GL_LINES)
+						for i in range(0, len(face)):
+							P1 = face[i]
+							P2 = face[(i+1)%len(face)]
+							glVertex3f(P1.x, P1.y, P1.z)
+							glVertex3f(P2.x, P2.y, P2.z)
+						glEnd()
 				
 				glDisable(GL_BLEND)
 				glEnable(GL_LIGHTING)
