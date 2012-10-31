@@ -2,6 +2,7 @@
 EPS = 1e-7
 M_PI = 3.1415925
 import math
+from numpy import matrix
 
 #############################################################
 ####                 PRIMITIVE CLASSES                  #####
@@ -214,7 +215,13 @@ class Matrix4(object):
 	#http://stackoverflow.com/questions/1148309/inverting-a-4x4-matrix
 	def Inverse(self):
 		m = self.m
+		numpym = matrix([[m[0], m[1], m[2], m[3]], [m[4], m[5], m[6], m[7]], [m[8], m[9], m[10], m[11]], [m[12], m[13], m[14], m[15]]])
+		inv = numpym.I.flatten()
+		return Matrix4(inv.tolist()[0])
+		
+		##There seems to be a bug with the way I did things before so I'm using numpy for now
 		inv = [0]*16
+		#[a11, a12, a13, a14, a21, a22, a23, a24, a31, a32, a33, a34, a41, a42, a43, a44] = m
 		inv[0] =   m[5]*m[10]*m[15] - m[5]*m[11]*m[14] - m[9]*m[6]*m[15] + m[9]*m[7]*m[14] + m[13]*m[6]*m[11] - m[13]*m[7]*m[10]
 		inv[4] =  -m[4]*m[10]*m[15] + m[4]*m[11]*m[14] + m[8]*m[6]*m[15] - m[8]*m[7]*m[14] - m[12]*m[6]*m[11] + m[12]*m[7]*m[10];
 		inv[8] =   m[4]*m[9]*m[15] - m[4]*m[11]*m[13] - m[8]*m[5]*m[15]	+ m[8]*m[7]*m[13] + m[12]*m[5]*m[11] - m[12]*m[7]*m[9];
@@ -486,6 +493,11 @@ def getPolygonArea(verts):
 	return area
 
 if __name__ == '__main__':
+	m = Matrix4([0, 1, 0, 0, 0, 0, 1, 2, 1, 0, 0, 0, 0, 0, 0, 1])
+	print m
+	print m.Inverse()
+
+if __name__ == '__main__2':
 #	P0 = Point3D(-2.5, 0, -2.5)
 #	V0 = Vector3D(-0, -0, -1)
 #	P1 = Point3D(-2.5, -2.5, 0)

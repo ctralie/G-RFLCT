@@ -269,7 +269,7 @@ class Beam3D(object):
 	#Put a face that has been clipped to the beam back into world coordinates
 	#by casting rays through the clipped vertices in the image plane
 	#and intersecting them with the face in world coordinates
-	#clipped: a list of clipped points
+	#clipped: a list of clipped points in 2D coordinates
 	#face: a MeshFace object representing the face in world coordinates
 	def projectBackClippedFace(self, clipped, face):
 		#NOTE: Can do ray intersect plane instead of ray intersect face
@@ -284,10 +284,20 @@ class Beam3D(object):
 			intersection = line.intersectPlane(plane)
 			if intersection:
 				vertices.append(intersection[1])
+				if intersection[1].z > 100 and False:
+					print line
+					print plane
+					print intersection[1]
+					print v
+					print vOrig
+					print self.mvMatrixInverse
+					print self.mvMatrix
+					print self.origin
+					print "\n\n"
 			else:
 				print "ERROR: Unable to find intersected point on face"
 				print vOrig
-				print ray
+				print line
 		return vertices	
 	
 	#Purpose: Return the largest face that is completely unobstructed from
@@ -580,7 +590,7 @@ class BeamTree(object):
 		#Now Reflect the beam across this face and recursively intersect
 		#that beam which has an order of +1
 		#(this is second so that beam reflection occurs breadth first)
-		#faceInFront is a tuple (projected and clipped vertices, clipped vertices back on face plane, face object)
+		#faceInFront is a tuple (projected and clipped vertices, clipped vertices back in 3D, face object)
 		facePoints = faceInFront[1]
 		face = faceInFront[2]
 		#First generate split beam and add it to the list of children
