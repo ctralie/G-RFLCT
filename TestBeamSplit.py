@@ -145,7 +145,6 @@ class Viewer(object):
 				poly = self.polyPoints
 			if button == GLUT_LEFT_BUTTON:
 				P = Point3D(x, y, 1)
-				P.origZ = 1
 				poly.append(P)
 			elif button == GLUT_RIGHT_BUTTON:
 				if len(poly) > 0:

@@ -327,8 +327,8 @@ class Line3D(object):
 			return None
 		detNumt = e*d - b*f
 		detNums = a*f - c*e
-		t = detNumt / detDenom
-		s = detNums / detDenom
+		t = float(detNumt) / float(detDenom)
+		s = float(detNums) / float(detDenom)
 		#print "s = %g, t = %g"%(s, t)
 		return (t, P0 + t*V0)
 	
