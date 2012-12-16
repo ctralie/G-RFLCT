@@ -1,5 +1,6 @@
-#TODO: Make EPS adaptive like in Beam3D
+#TODO: Make fix EPS weirdness
 EPS = 1e-7
+EPS_AREPLANAR = 1e-5
 M_PI = 3.1415925
 import math
 from numpy import matrix
@@ -439,7 +440,7 @@ def arePlanar(verts):
 	for i in range(3, len(verts)):
 		v = verts[i] - verts[0]
 		v.normalize()
-		if abs(v.Dot(n)) > EPS:
+		if abs(v.Dot(n)) > EPS_AREPLANAR:
 			return False
 	return True
 

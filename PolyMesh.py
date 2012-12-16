@@ -626,16 +626,16 @@ class PolyMesh(object):
 		elif suffix == "obj":
 			self.loadObjFile(filename)
 		else:
-			print "Unrecognized file suffix (%s)"%(suffix)
+			print "Unsupported file suffix (%s) for loading mesh"%(suffix, filename)
 	
-	def saveFile(self, filename):
+	def saveFile(self, filename, verbose = False):
 		suffix = re.split("\.", filename)[-1]
 		if suffix == "off":
-			self.saveOffFile(filename)
+			self.saveOffFile(filename, verbose)
 		elif suffix == "obj":
-			self.saveObjFile(filename)
+			self.saveObjFile(filename, verbose)
 		else:
-			print "Unrecognized file suffix (%s)"%(suffix)		
+			print "Unsupported file suffix (%s) for saving mesh %s"%(suffix, filename)		
 	
 	def loadOffFile(self, filename):
 		fin = open(filename, 'r')
@@ -676,12 +676,12 @@ class PolyMesh(object):
 		fin.close()
 			
 	
-	def saveOffFile(self, filename):
+	def saveOffFile(self, filename, verbose = False):
 		nV = len(self.vertices)
 		nE = len(self.edges)
 		nF = len(self.faces)
 		fout = open(filename, "w")
-		fout.write("#Generated with Chris Tralie's RFGA Library")
+		fout.write("#Generated with Chris Tralie's G-RFLCT Library\n")
 		fout.write("OFF\n%i %i %i\n"%(nV, nF, 0))
 		for v in self.vertices:
 			P = v.pos
@@ -693,6 +693,8 @@ class PolyMesh(object):
 				fout.write("%i "%(v.ID))
 			fout.write("\n")
 		fout.close()
+		if verbose:
+			print "Saved file to %s"%filename
 		
 	def loadObjFile(self, filename):
 		#TODO: Right now vertex normals, face normals, and texture coordinates are ignored
@@ -714,18 +716,25 @@ class PolyMesh(object):
 				self.addFace(verts)
 		fin.close()
 	
-	def saveObjFile(self, filename):
-		fout.write("#Generated with Chris Tralie's RFGA Library")
+	def saveObjFile(self, filename, verbose = False):
+		fout = open(filename, "w")
+		fout.write("#Generated with Chris Tralie's G-RFLCT Library\n")
 		for v in self.vertices:
 			P = v.pos
 			fout.write("v %g %g %g\n"%(P.x, P.y, P.z))
 		for f in self.faces:
 			verts = f.getVertices()
 			fout.write("f ")
-			for v in verts:
-				fout.write("%i "%(v.ID+1))#Indices are numbered starting at 1
+			i = 0
+			for i in range(0, len(verts)):
+				v = verts[i]
+				fout.write("%i"%(v.ID+1))#Indices are numbered starting at 1
+				if i < len(verts) - 1:
+					fout.write(" ")
 			fout.write("\n")
 		fout.close()
+		if verbose:
+			print "Saved file to %s"%filename
 	
 	def renderGL(self, drawEdges = 0, drawVerts = 0, drawNormals = 0):
 		if self.drawEdges != drawEdges:

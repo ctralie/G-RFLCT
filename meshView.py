@@ -8,7 +8,7 @@ from sys import argv
 import random
 
 class Viewer(object):
-	def __init__(self, filename):
+	def __init__(self, infilename, outfilename = "out.obj"):
 		#GLUT State variables
 		self.GLUTwindow_height = 800
 		self.GLUTwindow_width = 800
@@ -22,8 +22,9 @@ class Viewer(object):
 		self.drawCutPlane = 0
 		
 		#Camera state variables
+		self.outfilename = outfilename
 		self.mesh = PolyMesh()
-		self.mesh.loadFile(filename)
+		self.mesh.loadFile(infilename)
 		self.meshBBox = self.mesh.getBBox()
 		#self.mesh = getBoxMesh(1, 2, 1, Point3D(1, 100, 1), 0.55)
 		#print self.mesh
@@ -117,6 +118,9 @@ class Viewer(object):
 			self.drawVerts = 1 - self.drawVerts
 		elif key in ['n', 'N']:
 			self.drawNormals = 1 - self.drawNormals
+		elif key in ['o', 'O']:
+			#Save mesh
+			self.mesh.saveFile(self.outfilename, True)
 		elif key in ['p', 'P']:
 			self.drawCutPlane = 1 - self.drawCutPlane
 		elif key in ['r', 'R']:
@@ -209,6 +213,11 @@ class Viewer(object):
 
 if __name__ == '__main__':
 	if len(argv) < 2:
-		print "Usage: meshView <mesh filepath>"
+		print "Usage: meshView <mesh filepath> <out filename (optional)>"
 	else:
-		viewer = Viewer(argv[1])
+		if len(argv) < 3:
+			#The user has chosen an input name only
+			viewer = Viewer(argv[1])
+		else:
+			#The user has chosen an output filename to save
+			viewer = Viewer(argv[1], argv[2])
