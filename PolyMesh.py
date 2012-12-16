@@ -11,6 +11,7 @@ class MeshVertex(object):
 		self.ID = ID
 		self.edges = set() #Store reference to all emanating edges
 		#NOTE: Edges are not guaranteed to be in any particular order
+		self.component = -1 #Which connected component it's in
 	
 	def getVertexNeighbors(self):
 		ret = [0]*len(self.edges)
@@ -210,6 +211,9 @@ class PolyMesh(object):
 		self.vertices = []
 		self.edges = []
 		self.faces = []
+		#Pointers to a representative vertex in different 
+		#connected components
+		self.components = []
 	
 	#Return the edge between v1 and v2 if it exists, or
 	#return None if an edge has not yet been created 
@@ -444,6 +448,66 @@ class PolyMesh(object):
 	def flipNormals(self):
 		for f in self.faces:
 			f.flipNormal()
+	
+	def getConnectedComponents(self):
+		for v in self.vertices:
+			if v.component == -1:
+				self.components.append(v)
+				stack = [v]
+				while len(stack) > 0:
+					vcurr = stack[-1]
+					if vcurr.component == -1:
+						vcurr.component = len(self.components)-1
+						stack.pop()
+						for vNeighbor in vcurr.getVertexNeighbors():
+							stack.append(vNeighbor)
+					else:
+						stack.pop()
+	
+	def getConnectedComponentCounts(self):
+		counts = [0]*len(self.components)
+		for v in self.vertices:
+			if v.component > -1:
+				counts[v.component] = counts[v.component] + 1
+		return counts
+	
+	def deleteAllButLargestConnectedComponent(self):
+		if len(self.components) == 0:
+			self.getConnectedComponents()
+		counts = self.getConnectedComponentCounts()
+		largestComponent = 0
+		largestCount = 0
+		for i in range(0, len(counts)):
+			if counts[i] > largestCount:
+				largestCount = counts[i]
+				largestComponent = i
+		facesToDel = []
+		edgesToDel = []
+		#Delete faces first, then edges, then vertices
+		for f in self.faces:
+			if f.startV.component != largestComponent:
+				edgesToDel = edgesToDel + f.edges
+				facesToDel.append(f)
+		for f in facesToDel:
+			self.removeFace(f)
+		for e in edgesToDel:
+			if e.ID != -1:
+				self.removeEdge(e)
+		verticesToDel = []
+		for v in self.vertices:
+			if v.component != largestComponent:
+				verticesToDel.append(v)
+		for v in verticesToDel:
+			self.removeVertex(v)
+		#Now update the connected components list
+		if len(self.vertices) > 0:
+			self.components = [self.vertices[0]]
+			for v in self.vertices:
+				v.component = 0
+		self.needsDisplayUpdate = True
+	
+	def fillHoles(self):
+		print "TODO"
 
 	#############################################################
 	####                 GEOMETRY METHODS                   #####
@@ -464,6 +528,93 @@ class PolyMesh(object):
 			bbox.addPoint(v.pos)
 		return bbox
 	
+	def sliceBelowPlane(self, plane):
+		facesToDel = []
+		edgesToDel = []
+		verticesToDel = []
+		facesToAdd = []
+		newVertices = []
+		for e in self.edges:
+			#Keep track of edges which intersect the plane
+			#and the vertex that represents that intersection
+			e.centerVertex = None
+		for f in self.faces:
+			v1 = f.startV
+			deleteFace = False
+			splitFaceStartE = None
+			splitFaceStartEIndex = -1
+			splitFaceStartV = None
+			splitFaceEndE = None
+			for i in range(0, len(f.edges)):
+				e = f.edges[i]
+				v2 = e.vertexAcross(v1)
+				distV1 = plane.distFromPlane(v1.pos)
+				distV2 = plane.distFromPlane(v2.pos)
+				#Mark all vertices below the plane for deletion
+				#(this will count vertices more than once but 
+				#because mesh is manifold the amortized size will
+				#still be linear in the number of vertices)
+				if distV1 < 0:
+					verticesToDel.append(v1)
+				#Mark all edges that are fully or partially below
+				#the plane for deletion.  This list will hold
+				#every such edge at most twice since 2 faces meet
+				#at an edge in a manifold mesh
+				if distV1 < 0 or distV2 < 0:
+					edgesToDel.append(e)
+					deleteFace = True
+				#Edge goes from negative side to plus side of plane
+				if distV1 < 0 and distV2 >= 0:
+					if not e.centerVertex:
+						line = Line3D(v1.pos, v2.pos - v1.pos)
+						P = line.intersectPlane(plane)[1]
+						if P:
+							e.centerVertex = self.addVertex(P)
+					if e.centerVertex:
+						splitFaceStartEIndex = i
+						splitFaceStartV = v1
+						splitFaceStartE = e
+				#Edge goes from plus side to negative side of plane
+				if distV1 >= 0 and distV2 <= 0:
+					if not e.centerVertex:
+						line = Line3D(v1.pos, v2.pos - v1.pos)
+						P = line.intersectPlane(plane)[1]
+						if P:
+							e.centerVertex = self.addVertex(P)
+					if e.centerVertex:
+						splitFaceEndE = e					
+				v1 = v2
+			if deleteFace:
+				facesToDel.append(f)
+			#Walk along the split part of the face on the positive
+			#side of the plane
+			if splitFaceStartE and splitFaceEndE:
+				newFace = [splitFaceStartE.centerVertex]
+				i = splitFaceStartEIndex
+				e = splitFaceStartE
+				v1 = splitFaceStartV
+				while e != splitFaceEndE:
+					v1 = e.vertexAcross(v1)
+					newFace.append(v1)
+					i = (i+1)%len(f.edges)
+					e = f.edges[i]
+				newFace.append(splitFaceEndE.centerVertex)
+				facesToAdd.append(newFace)
+		#First remove all faces that are no longer relevant
+		for f in facesToDel:
+			self.removeFace(f)	
+		#Now remove edges that are no longer relevant
+		for e in edgesToDel:
+			if e.ID != -1:
+				self.removeEdge(e)
+		#Now remove vertices that are no longer relevant
+		for v in verticesToDel:
+			if v.ID != -1:
+				self.removeVertex(v)
+		#Add new faces
+		for f in facesToAdd:
+			self.addFace(f)
+		self.needsDisplayUpdate = True
 	
 	#############################################################
 	####                INPUT/OUTPUT METHODS                #####

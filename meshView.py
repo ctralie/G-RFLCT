@@ -19,6 +19,7 @@ class Viewer(object):
 		self.drawEdges = 0
 		self.drawVerts = 0
 		self.drawNormals = 0
+		self.drawCutPlane = 0
 		
 		#Camera state variables
 		self.mesh = PolyMesh()
@@ -32,6 +33,7 @@ class Viewer(object):
 		self.camera = MousePolarCamera(self.GLUTwindow_width, self.GLUTwindow_height)
 		self.camera.centerOnMesh(self.mesh)
 		random.seed()
+		self.cutPlane = None
 		
 		self.initGL()
 
@@ -69,6 +71,17 @@ class Viewer(object):
 		self.mesh.renderGL(self.drawEdges, self.drawVerts, self.drawNormals)
 		#self.mesh.renderCCWEdgesDebug()
 		
+		if self.drawCutPlane:
+			t = farDist*self.camera.towards
+			r = farDist*(t % self.camera.up)
+			#dP0 = (self.meshBBox.getCenter()).Length()/25.0
+			dP0 = 1
+			P0 = self.camera.eye - dP0*self.camera.up
+			self.cutPlane = getRectMesh(P0 + t + r, P0 + t - r, P0 - t - r, P0 - t + r)
+			glDisable(GL_LIGHTING)
+			glColor3f(0, 1, 0)
+			self.cutPlane.renderGL()
+		
 		glutSwapBuffers()
 	
 	def handleMouseStuff(self, x, y):
@@ -85,15 +98,32 @@ class Viewer(object):
 	def GLUTKeyboardUp(self, key, x, y):
 		self.handleMouseStuff(x, y)
 		self.keys[key] = False
+		if key in ['c', 'C']:
+			if len(self.mesh.components) == 0:
+				self.mesh.getConnectedComponents()
+			counts = self.mesh.getConnectedComponentCounts()
+			print "CONNECTED COMPONENTS: "
+			total = 0
+			for i in range(0, len(counts)):
+				print "%i: %i"%(i, counts[i])
+				total = total + counts[i]
+			print "%i vertices in mesh, sum of components is %i"%(len(self.mesh.vertices), total)
+			self.mesh.deleteAllButLargestConnectedComponent()
+			print "Number of vertices now: %i"%len(self.mesh.vertices)
+			print self.mesh
 		if key in ['e', 'E']:
 			self.drawEdges = 1 - self.drawEdges
 		elif key in ['v', 'V']:
 			self.drawVerts = 1 - self.drawVerts
 		elif key in ['n', 'N']:
 			self.drawNormals = 1 - self.drawNormals
+		elif key in ['p', 'P']:
+			self.drawCutPlane = 1 - self.drawCutPlane
 		elif key in ['r', 'R']:
 			self.mesh.splitFaces()
 			print self.mesh
+		elif key in ['s', 'S']:
+			self.mesh.sliceBelowPlane(self.cutPlane.faces[0].getPlane())
 		elif key in ['t', 'T']:
 			print "Triangulating mesh"
 			print self.mesh
