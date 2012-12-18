@@ -541,11 +541,11 @@ class PolyMesh(object):
 			self.addFace([vCenter, v1, v2])
 		
 	
-	def fillHoles(self):
+	def fillHoles(self, slicedHolesOnly = False):
 		holes = []
 		origEdges = self.edges[:]
 		for e in origEdges:
-			if e.numAttachedFaces() == 1:
+			if e.numAttachedFaces() == 1 and ((not slicedHolesOnly) or e.v1.borderVertex):
 				loop = [e.v1, e.v2]
 				finished = False
 				while not finished:
@@ -593,9 +593,9 @@ class PolyMesh(object):
 			bbox.addPoint(v.pos)
 		return bbox
 	
-	#Delete the parts of the mesh below "plane".  If retHole
-	#is true, return the hole that borders along the plane after the cut
-	def sliceBelowPlane(self, plane):
+	#Delete the parts of the mesh below "plane".  If fillHoles
+	#is true, plug up the holes that result from the cut
+	def sliceBelowPlane(self, plane, fillHoles = True):
 		facesToDel = []
 		edgesToDel = []
 		verticesToDel = []
@@ -689,6 +689,8 @@ class PolyMesh(object):
 		#Add new faces
 		for f in facesToAdd:
 			self.addFace(f)
+		if fillHoles:
+			self.fillHoles(slicedHolesOnly = True)
 		self.needsDisplayUpdate = True
 	
 	#############################################################
