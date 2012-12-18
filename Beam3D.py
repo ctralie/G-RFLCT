@@ -5,6 +5,7 @@ from PolyMesh import *
 from Cameras3D import *
 from OpenGL.GL import *
 import math
+import pickle
 
 #This helper function is used to print 2D polygons
 #as parallel lists of x and y coordinates
@@ -27,7 +28,7 @@ def printMatlabPoly(poly, suffix = ""):
 #TODO: Update image sources pruning to make use of this class
 #Get the epsilon to be used for numerical precision
 def getEPS(A, B, C):
-	return EPS
+	return 1e-7
 	avgdx = (abs(A.x-B.x) + abs(A.x-C.x) + abs(B.x-C.x))/3.0
 	avgdy = (abs(A.y-B.y) + abs(A.y-C.y) + abs(B.y-C.y))/3.0
 	avgdz = (abs(A.z-B.z) + abs(A.z-C.z) + abs(B.z-C.z))/3.0
@@ -403,9 +404,22 @@ class Beam3D(object):
 		if toggleDrawSplits:
 			if faceInFront:
 				glColor3f(0, 1, 0)
+				print "BEAM POINTS: "
+				for P in self.frustPoints:
+					print P
+				print "FACEINFRONT POINTS:"
+				for P in faceInFront[0]:
+					print P
 				subBeams = splitBeam(self, faceInFront[0])
+				print "There are %i subbeams"%len(subBeams)
 				for subBeam in subBeams:
 					self.drawPolygon(subBeam, minX, maxX, minY, maxY, dim)
+				fout = open('beam.dat', 'w')
+				pickle.dump(self, fout)
+				fout.close()
+				fout = open('faceInFront.dat', 'w')
+				pickle.dump(faceInFront, fout)
+				fout.close()
 		else:
 			glColor3f(0, 0, 1)
 			clippedFaces = [self.clipMeshFace(face) for face in faces]
@@ -480,11 +494,11 @@ def splitBeam(beam, face):
 		#Step 2: Figure out the polygon that's formed between the line
 		#from this face segment and the convex section of the beam it cuts off
 		if leftBeamIndex == -1 or rightBeamIndex == -1:
-			#print "ERROR: Not all interesections were found while trying to split beam"
-			#if leftBeamIndex == -1:
-			#	print "ERROR: No left intersection found while trying to split beam"
-			#if rightBeamIndex == -1:
-			#	print "ERROR: No right intersection found while trying to split beam"
+			print "ERROR: Not all interesections were found while trying to split beam"
+			if leftBeamIndex == -1:
+				print "ERROR: No left intersection found while trying to split beam"
+			if rightBeamIndex == -1:
+				print "ERROR: No right intersection found while trying to split beam"
 			continue
 		if leftBeamIndex == rightBeamIndex:
 			continue
@@ -574,7 +588,7 @@ class BeamTree(object):
 		#NOTE: faceInFront[0] is the clipped and projected version of
 		#the face in front so it should match 
 		subBeams = splitBeam(beam, faceInFront[0])
-		#print "There are %i beams split around the front face"%len(subBeams)
+		print "There are %i beams split around the front face"%len(subBeams)
 		for subBeamPoints in subBeams:
 			subBeamPoints = [beam.mvMatrixInverse*P for P in subBeamPoints]
 			#print "[",
@@ -599,8 +613,9 @@ class BeamTree(object):
 		#Next remove "beam" from its parent's children list since it's 
 		#no longer relevant and has been split into a bunch of pieces
 		#TODO: Make removing more efficient
-		beam.parent.children.remove(beam)
+		#beam.parent.children.remove(beam)
 		
+		return
 		#Now add the reflected beam as a child of the split front beam
 		faceNormal = getFaceNormal(facePoints)
 		dV = beam.origin - facePoints[0]
@@ -612,8 +627,47 @@ class BeamTree(object):
 		self.intersectBeam(reflectedBeam, self.allFaces, maxOrder)
 
 
-#Test a simple beam projection and split case
+
+
+
+######################################################
+
+#Testing a case where beam splitting did not work properly
 if __name__ == '__main__':
+	beamPoints = [Point3D(0.004, -0.004, -0.01), Point3D(0.01, -0.004, -0.01), Point3D(0.01, 0.01, -0.01), Point3D(0.004, 0.01, -0.01)]
+	faceInFrontPoints2 = [Point3D(0.004, -0.004, -0.01), Point3D(0.01, -0.004, -0.01), Point3D(0.01, 0.01, -0.01), Point3D(0.004, 0.004, -0.01)]
+	beam2 = Beam3D(Point3D(0, 0, 0), beamPoints)
+	beam2.frustPoints = beamPoints
+	print "SPLITTING TYPED BEAM"
+	splitBeams2 = splitBeam(beam2, faceInFrontPoints2)
+	print "DONE SPLITTING TYPED BEAM"
+	fin = open("beam.dat", 'r')
+	beam = pickle.load(fin)
+	fin.close()
+	fin = open("faceInFront.dat", 'r')
+	faceInFront = pickle.load(fin)
+	fin.close()
+	print "SPLITTING LOADED BEAM"
+	splitBeams = splitBeam(beam, faceInFront[0])
+	print "FINISHED SPLITTING LOADED BEAM"
+	print "DIFFERENCE BETWEEN LOADED AND TYPED:"
+	for i in range(0, len(beam.frustPoints)):
+		print beam.frustPoints[i] - beamPoints[i]
+	for i in range(0, len(faceInFront[0])):
+		print (faceInFront[0])[i] - faceInFrontPoints2[i]
+	print "\n\nLOADED BEAM SPLIT:"
+	for SB in splitBeams:
+		for P in SB:
+			print P
+		print "\n"
+	print "\n\nTYPED BEAM SPLIT:"
+	for SB in splitBeams2:
+		for P in SB:
+			print P
+		print "\n"	
+
+#Test a simple beam projection and split case
+if __name__ == '__main__5':
 	#Simple beam projection and splitting test for debugging
 	origin = Point3D(0, 0, -2)
 	frustVertices = [v+origin for v in [Point3D(-1, -1, 1), Point3D(1, -1, 1), Point3D(1, 1, 1), Point3D(-1, 1, 1)]]
@@ -639,10 +693,7 @@ if __name__ == '__main__':
 	projectedBack = beam.projectBackClippedFace(clipped, mesh.faces[0])
 	for P in projectedBack:
 		print P
-
-
-######################################################
-
+		
 #This main was used to debug numerical precision errors in Beam3D.clipToFrustum()
 if __name__ == '__main__4':
 	facePoints = [Point3D(0.8, -1.25, -1.3), Point3D(0.8, -1.25, -1.2), Point3D(0.8, -0.27, -1.2), Point3D(0.8, -0.27, -1.3)]

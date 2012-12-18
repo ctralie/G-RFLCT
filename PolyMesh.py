@@ -184,6 +184,14 @@ class MeshEdge(object):
 	def getCenter(self):
 		[P1, P2] = [self.v1.pos, self.v2.pos]
 		return 0.5*(P1 + P2)
+	
+	def numAttachedFaces(self):
+		ret = 0
+		if self.f1:
+			ret = ret + 1
+		if self.f2:
+			ret = ret + 1
+		return ret
 
 def getFaceInCommon(e1, e2):
 	e2faces = []
@@ -195,6 +203,12 @@ def getFaceInCommon(e1, e2):
 		return e1.f1
 	if e1.f2 in e2faces:
 		return e1.f2
+	return None
+
+def getEdgeInCommon(v1, v2):
+	for e in v1.edges:
+		if e.vertexAcross(v1) is v2:
+			return e
 	return None
 
 #############################################################
@@ -506,8 +520,59 @@ class PolyMesh(object):
 				v.component = 0
 		self.needsDisplayUpdate = True
 	
+	#Fill hole with the "advancing front" method
+	#but keep it simple for now; not tests for self intersections
+	def fillHole(self, hole):
+		#TODO: Maintain a min priority queue that indexes based on angle
+		#for i in range(0, len(hole)):
+		#	vb = hole[(i+len(hole)-1)%len(hole)]
+		#	v = hole[i]
+		#	va = hole[(i+1)%len(hole)]
+		#	v.before = vb
+		#	v.after = va
+		c = Point3D(0, 0, 0)
+		for mV in hole:
+			c = c + mV.pos
+		c = (1.0/float(len(hole)))*c
+		vCenter = self.addVertex(c)
+		for i in range(0, len(hole)):
+			v1 = hole[i]
+			v2 = hole[(i+1)%len(hole)]
+			self.addFace([vCenter, v1, v2])
+		
+	
 	def fillHoles(self):
-		print "TODO"
+		holes = []
+		origEdges = self.edges[:]
+		for e in origEdges:
+			if e.numAttachedFaces() == 1:
+				loop = [e.v1, e.v2]
+				finished = False
+				while not finished:
+					foundNext = False
+					for v in loop[-1].getVertexNeighbors():
+						if v is loop[-2]:
+							#Make sure it doesn't accidentally back up
+							continue
+						elif v is loop[0]:
+							#It's looped back on itself so we're done
+							finished = True
+						else:
+							e = getEdgeInCommon(loop[-1], v)
+							if not e:
+								print "Warning: Edge not found in common while trying to trace hole boundary"
+								finished = True
+								break
+							elif e.numAttachedFaces() == 1:
+								foundNext = True
+								loop.append(v)
+								break
+					if not foundNext and not finished:
+						print "Warning: Unable to close hole"
+						break
+				print "Found hole of size %i"%len(loop)
+				self.fillHole(loop)
+		self.needsDisplayUpdate = True
 
 	#############################################################
 	####                 GEOMETRY METHODS                   #####
@@ -528,16 +593,22 @@ class PolyMesh(object):
 			bbox.addPoint(v.pos)
 		return bbox
 	
+	#Delete the parts of the mesh below "plane".  If retHole
+	#is true, return the hole that borders along the plane after the cut
 	def sliceBelowPlane(self, plane):
 		facesToDel = []
 		edgesToDel = []
 		verticesToDel = []
 		facesToAdd = []
 		newVertices = []
+		borderVertex = None
 		for e in self.edges:
 			#Keep track of edges which intersect the plane
 			#and the vertex that represents that intersection
 			e.centerVertex = None
+		for v in self.vertices:
+			#Keep track of which vertices are introduced at the plane slice
+			v.borderVertex = False
 		for f in self.faces:
 			v1 = f.startV
 			deleteFace = False
@@ -570,6 +641,8 @@ class PolyMesh(object):
 						P = line.intersectPlane(plane)[1]
 						if P:
 							e.centerVertex = self.addVertex(P)
+							e.centerVertex.borderVertex = True
+							borderVertex = e.centerVertex
 					if e.centerVertex:
 						splitFaceStartEIndex = i
 						splitFaceStartV = v1
@@ -581,6 +654,8 @@ class PolyMesh(object):
 						P = line.intersectPlane(plane)[1]
 						if P:
 							e.centerVertex = self.addVertex(P)
+							e.centerVertex.borderVertex = True
+							borderVertex = e.centerVertex
 					if e.centerVertex:
 						splitFaceEndE = e					
 				v1 = v2
@@ -682,6 +757,7 @@ class PolyMesh(object):
 		nF = len(self.faces)
 		fout = open(filename, "w")
 		fout.write("#Generated with Chris Tralie's G-RFLCT Library\n")
+		fout.write("#http://www.github.com/ctralie/G-RFLCT\n")
 		fout.write("OFF\n%i %i %i\n"%(nV, nF, 0))
 		for v in self.vertices:
 			P = v.pos
@@ -719,6 +795,7 @@ class PolyMesh(object):
 	def saveObjFile(self, filename, verbose = False):
 		fout = open(filename, "w")
 		fout.write("#Generated with Chris Tralie's G-RFLCT Library\n")
+		fout.write("#http://www.github.com/ctralie/G-RFLCT\n")
 		for v in self.vertices:
 			P = v.pos
 			fout.write("v %g %g %g\n"%(P.x, P.y, P.z))
@@ -736,7 +813,17 @@ class PolyMesh(object):
 		if verbose:
 			print "Saved file to %s"%filename
 	
-	def renderGL(self, drawEdges = 0, drawVerts = 0, drawNormals = 0):
+	def saveSTLFile(self, filename, verbose = False):
+		fout = open(filename, "w")
+		fout.write("#Generated with Chris Tralie's G-RFLCT Library\n")
+		fout.write("#http://www.github.com/ctralie/G-RFLCT\n")
+		fout.write("solid \n")
+		
+		fout.close()
+		if verbose:
+			print "Saved file to %s"%filename
+	
+	def renderGL(self, drawEdges = 0, drawVerts = 0, drawNormals = 0, extraVerts = None):
 		if self.drawEdges != drawEdges:
 			self.drawEdges = drawEdges
 			self.needsDisplayUpdate = True
@@ -784,6 +871,15 @@ class PolyMesh(object):
 					P2 = P1 + 0.05*v.getNormal()
 					glVertex3f(P1.x, P1.y, P1.z)
 					glVertex3f(P2.x, P2.y, P2.z)
+				glEnd()
+			if extraVerts:
+				glDisable(GL_LIGHTING)
+				glColor3f(1, 1, 0)
+				glPointSize(5)
+				glBegin(GL_POINTS)
+				for v in extraVerts:
+					P = v.pos
+					glVertex3f(P.x, P.y, P.z)
 				glEnd()
 			glEndList()
 			self.needsDisplayUpdate = False

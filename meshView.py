@@ -35,6 +35,7 @@ class Viewer(object):
 		self.camera.centerOnMesh(self.mesh)
 		random.seed()
 		self.cutPlane = None
+		self.planeBorder = []
 		
 		self.initGL()
 
@@ -69,7 +70,7 @@ class Viewer(object):
 		glMaterialfv(GL_FRONT_AND_BACK, GL_SPECULAR, [0.2, 0.2, 0.2, 1.0])
 		glMaterialfv(GL_FRONT_AND_BACK, GL_SHININESS, 64)
 
-		self.mesh.renderGL(self.drawEdges, self.drawVerts, self.drawNormals)
+		self.mesh.renderGL(self.drawEdges, self.drawVerts, self.drawNormals, self.planeBorder)
 		#self.mesh.renderCCWEdgesDebug()
 		
 		if self.drawCutPlane:
@@ -112,8 +113,10 @@ class Viewer(object):
 			self.mesh.deleteAllButLargestConnectedComponent()
 			print "Number of vertices now: %i"%len(self.mesh.vertices)
 			print self.mesh
-		if key in ['e', 'E']:
+		elif key in ['e', 'E']:
 			self.drawEdges = 1 - self.drawEdges
+		elif key in ['h', 'H']:
+			self.mesh.fillHoles()
 		elif key in ['v', 'V']:
 			self.drawVerts = 1 - self.drawVerts
 		elif key in ['n', 'N']:
