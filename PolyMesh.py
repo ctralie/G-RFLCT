@@ -577,6 +577,13 @@ class PolyMesh(object):
 	#############################################################
 	####                 GEOMETRY METHODS                   #####
 	#############################################################
+
+	#Transformations are simple because geometry information is only
+	#stored in the vertices
+	def Transform(self, matrix):
+		for v in self.vertices:
+			v.pos = matrix*v.pos
+
 	def getCentroid(self):
 		center = Vector3D(0.0, 0.0, 0.0)
 		for v in self.vertices:
@@ -798,6 +805,7 @@ class PolyMesh(object):
 		fout = open(filename, "w")
 		fout.write("#Generated with Chris Tralie's G-RFLCT Library\n")
 		fout.write("#http://www.github.com/ctralie/G-RFLCT\n")
+		fout.flush()
 		for v in self.vertices:
 			P = v.pos
 			fout.write("v %g %g %g\n"%(P.x, P.y, P.z))
@@ -929,12 +937,6 @@ class PolyMesh(object):
 		if isinstance(Point, Point3D):
 			return [t, Point, Face]
 		return None
-	
-	#Transformations are simple because geometry information is only
-	#stored in the vertices
-	def Transform(self, matrix):
-		for v in self.vertices:
-			v.pos = matrix*v.pos
 	
 	def __str__(self):
 		nV = len(self.vertices)

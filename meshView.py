@@ -76,8 +76,8 @@ class Viewer(object):
 		if self.drawCutPlane:
 			t = farDist*self.camera.towards
 			r = farDist*(t % self.camera.up)
-			#dP0 = (self.meshBBox.getCenter()).Length()/25.0
-			dP0 = 1
+			dP0 = farDist / 10.0
+			#dP0 = 1
 			P0 = self.camera.eye - dP0*self.camera.up
 			self.cutPlane = getRectMesh(P0 + t + r, P0 + t - r, P0 - t - r, P0 - t + r)
 			glDisable(GL_LIGHTING)
@@ -127,8 +127,12 @@ class Viewer(object):
 		elif key in ['p', 'P']:
 			self.drawCutPlane = 1 - self.drawCutPlane
 		elif key in ['r', 'R']:
-			self.mesh.splitFaces()
-			print self.mesh
+			#Rotate mesh to align with viewpoint
+			[t, u, r] = [self.camera.towards, self.camera.up, self.camera.towards%self.camera.up]
+			rotMat = Matrix4([r.x, u.x, -t.x, 0, r.y, u.y, -t.y, 0, r.z, u.z, -t.z, 0, 0, 0, 0, 1])
+			rotMat = rotMat.Inverse()
+			self.mesh.Transform(rotMat)
+			self.camera.centerOnMesh(self.mesh)
 		elif key in ['s', 'S']:
 			self.mesh.sliceBelowPlane(self.cutPlane.faces[0].getPlane())
 		elif key in ['t', 'T']:
