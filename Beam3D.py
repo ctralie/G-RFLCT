@@ -88,8 +88,8 @@ def CCW2D(A, B, C):
 #order: The "depth" of the beam; e.g. order 0 means this beam started at
 #the origin and is heading towards its first boundary; order 1 means the beam
 #has reflected off of one face already
+#face: The face of the image plane (None if this is a root beam)
 #dummy: Used to construct the root of the beam tree
-#freeBeam: True if this beam is not associated with a face, false otherwise
 class Beam3D(object):
 	def __init__(self, origin, frustVertices, parent = None, order = 0, face = None, dummy = False):
 		self.dummy = dummy
@@ -120,17 +120,14 @@ class Beam3D(object):
 		self.mvMatrix = getCameraMatrix(self.towards, self.up, self.right, self.origin)
 		self.mvMatrixInverse = self.mvMatrix.Inverse()
 		#Now calculate the near distance if the beam is associated with a face
-		self.freeBeam = True
 		if face:
 			P = self.mvMatrix*frustVertices[0]
 			self.neardist = -P.z
-			self.freeBeam = False
 		#Now map the frustum points to 2D image plane coordinates
 		self.frustPoints = self.projectPolygon(frustVertices, False)
 	
 	#Project a polygon onto the beam's image plane (before clipping to frustum)
-	#Side effect: The field "origZ" is added to all point objects to store
-	#the original z coordinates before projection
+	#Also clip the polygon to the beam's image plane
 	def projectPolygon(self, polygon, doClip = True):
 		#First transform all points into the beam's field of view
 		mvVerts = [self.mvMatrix*v for v in polygon]
@@ -313,6 +310,9 @@ class Beam3D(object):
 		validFaces = []
 		#First find the faces that are actually within the beam
 		for face in faces:
+			if face is self.face:
+				#Don't consider the imaging plane
+				continue
 			clipped = self.clipMeshFace(face)
 			if len(clipped) > 2:
 				#Only consider the face if it is within the beam
@@ -405,22 +405,9 @@ class Beam3D(object):
 		if toggleDrawSplits:
 			if faceInFront:
 				glColor3f(0, 1, 0)
-				print "BEAM POINTS: "
-				for P in self.frustPoints:
-					print P
-				print "FACEINFRONT POINTS:"
-				for P in faceInFront[0]:
-					print P
 				subBeams = splitBeam(self, faceInFront[0])
-				print "There are %i subbeams"%len(subBeams)
 				for subBeam in subBeams:
 					self.drawPolygon(subBeam, minX, maxX, minY, maxY, dim)
-				fout = open('beam.dat', 'w')
-				pickle.dump(self, fout)
-				fout.close()
-				fout = open('faceInFront.dat', 'w')
-				pickle.dump(faceInFront, fout)
-				fout.close()
 		else:
 			glColor3f(0, 0, 1)
 			clippedFaces = [self.clipMeshFace(face) for face in faces]
@@ -434,7 +421,75 @@ class Beam3D(object):
 		glPolygonMode(GL_FRONT_AND_BACK, GL_FILL)
 		glEnable(GL_DEPTH_TEST)
 		glEnable(GL_LIGHTING)
+	
+	#Draw the beam in space as a transparent object
+	def drawBeam(self, color = (0, 1, 0), beamTrans = 0.3):
+		glDisable(GL_LIGHTING)
+		glEnable(GL_BLEND)
+		glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA)
 		
+		P0 = self.origin
+		Points = self.frustVertices
+
+		if self.face:
+			#The beam is a reflected beam and starts at a face
+			#PointsStart are the points on the imaging face, and Points
+			#are the points at the end of the beam
+			PointsStart = [self.mvMatrixInverse*P for P in self.frustPoints]
+			glColor4f(color[0], color[1], color[2], beamTrans)
+			for i1 in range(0, len(Points)):
+				glBegin(GL_POLYGON)
+				i2 = (i1+1)%len(Points)
+				toDraw = [PointsStart[i1], Points[i1], Points[i2], PointsStart[i2]]
+				for P in toDraw:
+					glVertex3f(P.x, P.y, P.z)
+				glEnd()
+			glColor3f(0, 0, 0.3)
+			glLineWidth(5)
+			glBegin(GL_LINES)
+			for i in range(0, len(Points)):
+				[P1, P2] = [PointsStart[i], Points[i]]
+				glVertex3f(P1.x, P1.y, P1.z)
+				glVertex3f(P2.x, P2.y, P2.z)
+			glEnd()
+		else:
+			#The beam is a root beam and starts at a point
+			glColor4f(color[0], color[1], color[2], beamTrans)
+			glBegin(GL_TRIANGLES)
+			for i in range(0, len(Points)):
+				P1 = Points[i]
+				P2 = Points[(i+1)%len(Points)]
+				glVertex3f(P0.x, P0.y, P0.z)
+				glVertex3f(P1.x, P1.y, P1.z)
+				glVertex3f(P2.x, P2.y, P2.z)
+			glEnd()
+			glColor3f(0, 0, 0.3)
+			glLineWidth(5)
+			glBegin(GL_LINES)
+			for P in Points:
+				glVertex3f(P0.x, P0.y, P0.z)
+				glVertex3f(P.x, P.y, P.z)
+			glEnd()
+
+		glDisable(GL_BLEND)
+		glEnable(GL_LIGHTING)
+	
+	#Draw outlines of shapes clipped to this beam in 3D
+	def drawBackProjected(self, faces):
+		glDisable(GL_LIGHTING)
+		backProjectedFaces = []
+		self.findLargestUnobstructedFace(faces, backProjectedFaces)
+		glColor3f(1, 0, 0)
+		glLineWidth(3)
+		for face in backProjectedFaces:
+			glBegin(GL_LINES)
+			for i in range(0, len(face)):
+				P1 = face[i]
+				P2 = face[(i+1)%len(face)]
+				glVertex3f(P1.x, P1.y, P1.z)
+				glVertex3f(P2.x, P2.y, P2.z)
+			glEnd()
+		glEnable(GL_LIGHTING)
 	
 	def __str__(self):
 		ret = "Beam3D: origin = %s, neardist = %s, Points = "%(self.origin, self.neardist)
@@ -577,7 +632,7 @@ class BeamTree(object):
 	#A recursive function that intersects "beam" with "faces" and splits/reflects the beam
 	#until the maximum order is reached
 	def intersectBeam(self, beam, faces, maxOrder):
-		if beam.order == maxOrder:
+		if beam.order > maxOrder:
 			return
 		if len(faces) == 0:
 			return
@@ -590,13 +645,9 @@ class BeamTree(object):
 		#NOTE: faceInFront[0] is the clipped and projected version of
 		#the face in front so it should match 
 		subBeams = splitBeam(beam, faceInFront[0])
-		print "There are %i beams split around the front face"%len(subBeams)
+		#print "There are %i beams split around the front face"%len(subBeams)
 		for subBeamPoints in subBeams:
 			subBeamPoints = [beam.mvMatrixInverse*P for P in subBeamPoints]
-			#print "[",
-			#for P in subBeamPoints:
-			#	print "%g,"%P.z,
-			#print "]"
 			subBeam = Beam3D(beam.origin, subBeamPoints, beam.parent, beam.order, beam.face)
 			#Since this is a split and not a reflection the split part has the same
 			#parent as "beam"
@@ -617,7 +668,6 @@ class BeamTree(object):
 		#TODO: Make removing more efficient
 		beam.parent.children.remove(beam)
 		
-		return
 		#Now add the reflected beam as a child of the split front beam
 		faceNormal = getFaceNormal(facePoints)
 		dV = beam.origin - facePoints[0]
@@ -630,114 +680,4 @@ class BeamTree(object):
 
 ######################################################
 
-#Testing a case where beam splitting did not work properly
-if __name__ == '__main__':
-	beamPoints = [Point3D(0.004, -0.004, -0.01), Point3D(0.01, -0.004, -0.01), Point3D(0.01, 0.01, -0.01), Point3D(0.004, 0.01, -0.01)]
-	faceInFrontPoints2 = [Point3D(0.004, -0.004, -0.01), Point3D(0.01, -0.004, -0.01), Point3D(0.01, 0.01, -0.01), Point3D(0.004, 0.004, -0.01)]
-	beam2 = Beam3D(Point3D(0, 0, 0), beamPoints)
-	beam2.frustPoints = beamPoints
-	print "SPLITTING TYPED BEAM"
-	splitBeams2 = splitBeam(beam2, faceInFrontPoints2)
-	print "DONE SPLITTING TYPED BEAM"
-	fin = open("beam.dat", 'r')
-	beam = pickle.load(fin)
-	fin.close()
-	fin = open("faceInFront.dat", 'r')
-	faceInFront = pickle.load(fin)
-	fin.close()
-	print "SPLITTING LOADED BEAM"
-	splitBeams = splitBeam(beam, faceInFront[0])
-	print "FINISHED SPLITTING LOADED BEAM"
-	print "DIFFERENCE BETWEEN LOADED AND TYPED:"
-	for i in range(0, len(beam.frustPoints)):
-		print beam.frustPoints[i] - beamPoints[i]
-	for i in range(0, len(faceInFront[0])):
-		print (faceInFront[0])[i] - faceInFrontPoints2[i]
-	print "\n\nLOADED BEAM SPLIT:"
-	for SB in splitBeams:
-		for P in SB:
-			print P
-		print "\n"
-	print "\n\nTYPED BEAM SPLIT:"
-	for SB in splitBeams2:
-		for P in SB:
-			print P
-		print "\n"	
 
-if __name__ == '__main__6':
-	fin = open("beam.dat", 'r')
-	beam = pickle.load(fin)
-	fin.close()
-	fin = open("faceInFront.dat", 'r')
-	faceInFront = pickle.load(fin)
-	fin.close()
-	[bP1, bP2, fP2] = [beam.frustPoints[0], beam.frustPoints[1], (faceInFront[0])[1]]
-	print "bP1 = %s, bP2 = %s, fP2 = %s"%(bP1, bP2, fP2)
-	print "%i"%CCW2D(bP1, bP2, fP2)
-
-#Test a simple beam projection and split case
-if __name__ == '__main__5':
-	#Simple beam projection and splitting test for debugging
-	origin = Point3D(0, 0, -2)
-	frustVertices = [v+origin for v in [Point3D(-1, -1, 1), Point3D(1, -1, 1), Point3D(1, 1, 1), Point3D(-1, 1, 1)]]
-	beam = Beam3D(origin, frustVertices)
-	faceVertices = [Point3D(-2, -2, -4), Point3D(-2, -2, 4), Point3D(-2, 2, 4), Point3D(-2, 2, -4)]
-	mesh = PolyMesh()
-	meshVertices = []
-	for V in faceVertices:
-		meshVertices.append(mesh.addVertex(V))
-	mesh.addFace(meshVertices)
-	projected = beam.projectPolygon(faceVertices)
-	print "PROJECTED POLYGON POINTS"
-	for P in projected:
-		print "%s"%(P)
-	print "\nFRUSTUM POINTS:"
-	for P in beam.frustPoints:
-		print P
-	clipped = beam.clipToFrustum(projected)
-	print "\nCLIPPED POINTS"
-	for P in clipped:
-		print "%s"%(P)
-	print "\nPOINTS PROJECTED BACK"
-	projectedBack = beam.projectBackClippedFace(clipped, mesh.faces[0])
-	for P in projectedBack:
-		print P
-		
-#This main was used to debug numerical precision errors in Beam3D.clipToFrustum()
-if __name__ == '__main__4':
-	facePoints = [Point3D(0.8, -1.25, -1.3), Point3D(0.8, -1.25, -1.2), Point3D(0.8, -0.27, -1.2), Point3D(0.8, -0.27, -1.3)]
-	origin = Point3D(0, 0, -2)
-	beamVerts = [v+origin for v in [Point3D(-1, -1, 1), Point3D(1, -1, 1), Point3D(1, 1, 1), Point3D(-1, 1, 1)]]
-	beam = Beam3D(origin, beamVerts)
-	printMatlabPoly(beam.frustPoints, "beam")
-	print "\n\n"
-	projected = beam.projectPolygon(facePoints)
-	printMatlabPoly(projected, "proj")
-	print "\n\n"
-	clipped = beam.clipPolygon(facePoints)
-	printMatlabPoly(clipped, "clip")
-	
-
-if __name__== '__main__1':
-	unitBox = getBoxMesh()
-	tree = BeamTree(Point3D(0, 0, 0), unitBox.faces[:], 1)
-
-
-if __name__ == '__main_2':
-	origin =  Point3D(-2.5, 2.5, -2)
-	frustPoints = [Point3D(1.25, 2.5, 2.5), Point3D(1.25, 2.5, -2.5), Point3D(3.75, 2.5, -2.5), Point3D(3.75, 2.5, 2.5)]
-	points = [Point3D(-4.5, -3.75, 0), Point3D(0.5, -3.75, 0), Point3D(0.5, -6.25, 0), Point3D(-4.5, -6.25, 0)]
-	beam = Beam3D(origin, frustPoints)
-	beam.clipPolygon(points)
-
-if __name__ == '__main__3':
-	mesh = getRectMesh(Point3D(-1, -1, -1), Point3D(-1, 1, -1), Point3D(0, 1, -1), Point3D(0, -1, -1))
-	beam = Beam3D(Point3D(0, 0, 0), [v.pos for v in mesh.faces[0].getVertices()], mesh.faces[0])
-	#poly = [Vector3D(-3, 0, 0), Vector3D(0, 0, 1), Vector3D(2, 0, 1), Vector3D(3, 0, 0), Vector3D(7, 0, -4), Vector3D(5, 0, -5), Vector3D(3, 0, -5), Vector3D(0, 0, -3)]
-	#poly = [Vector3D(-1, 0, -1)]#, Vector3D(-0.5, 0.5, -1), Vector3D(1.5, 0.5, -1), Vector3D(2, 0, -1), Vector3D(1.5, -0.5, -1), Vector3D(0, -1, -1)]
-	#poly = [v+Vector3D(-100, 0, 0) for v in poly]
-	poly = [Point3D(-1, -1, -1), Point3D(-1, 1, -1), Point3D(0, 1, -1), Point3D(0, -1, -2)]
-	poly = beam.projectPolygon(poly)
-	poly = beam.clipToFrustum(poly)
-	for v in poly:
-		print beam.mvMatrixInverse*v

@@ -245,7 +245,10 @@ class EMScene(object):
 				self.Receiver = Point3D(coords[0], coords[1], coords[2])
 			else:
 				if not (currNode.tag in ["EMMaterials", "OpticalMaterials", "RadiosityMaterials"]):
-					print "Unrecognized tag %s"%currNode.tag
+					#Checking to make sure it's a string handles the case 
+					#where it's a comment
+					if type(currNode.tag) is str:
+						print "Unrecognized tag %s"%currNode.tag
 
 	#Get a list of meshes in the scene
 	#Transform all of the meshes into world coordinates but keep

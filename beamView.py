@@ -53,7 +53,8 @@ class Viewer(object):
 			self.meshFaces = self.meshFaces + mesh.faces
 		
 		self.selectedFace = None
-		self.drawBeam = False
+		self.drawBeam = True
+		self.drawChildren = True
 		self.beamIndex = 0
 		self.sceneTransparent = True
 		self.toggleDrawSplits = False
@@ -117,68 +118,21 @@ class Viewer(object):
 				glPopMatrix()
 			
 			if self.drawBeam:
-				glDisable(GL_LIGHTING)
-				glEnable(GL_BLEND)
-				glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA)
-				#for beamIndex in range(0, len(self.beamTree.root.children)):
-				#	self.beamIndex = beamIndex
-				if True:
-					beam = self.beamTree.root.children[self.beamIndex]
-					if True:
-						P0 = beam.origin
-						#Points = [P0 + 5*(v-P0) for v in beam.frustVertices]
-						Points = beam.frustVertices
-						#for i in range(0, len(Points)):
-						#	P = Points[i]
-						#	dV = P - P0
-						#	dV.normalize()
-						#	Points[i] = P0 + dV*5
+				beam = self.beamTree.root.children[self.beamIndex]
+				beam.drawBeam()
 				
-						glColor4f(0, 1, 0, self.beamTrans)
-						glBegin(GL_TRIANGLES)
-						for i in range(0, len(Points)):
-							P1 = Points[i]
-							P2 = Points[(i+1)%len(Points)]
-							glVertex3f(P0.x, P0.y, P0.z)
-							glVertex3f(P1.x, P1.y, P1.z)
-							glVertex3f(P2.x, P2.y, P2.z)
-						glEnd()
-						glColor3f(0, 1, 0)
-						glBegin(GL_POLYGON)
-						for P in Points:
-							glVertex3f(P.x, P.y, P.z)
-						glEnd()
-						glColor3f(0, 0, 0.3)
-						glLineWidth(5)
-						glBegin(GL_LINES)
-						for P in Points:
-							glVertex3f(P0.x, P0.y, P0.z)
-							glVertex3f(P.x, P.y, P.z)
-						glEnd()
-				
-					#Draw clipped faces within the beam back in world coordinates
-					if DRAW_BACKPROJECTED:
-						backProjectedFaces = []
-						self.beamTree.root.children[self.beamIndex].findLargestUnobstructedFace(self.meshFaces, backProjectedFaces)
-						glColor3f(1, 0, 0)
-						glLineWidth(3)
-						for face in backProjectedFaces:
-							glBegin(GL_LINES)
-							for i in range(0, len(face)):
-								P1 = face[i]
-								P2 = face[(i+1)%len(face)]
-								glVertex3f(P1.x, P1.y, P1.z)
-								glVertex3f(P2.x, P2.y, P2.z)
-							glEnd()
-				
-				glDisable(GL_BLEND)
-				glEnable(GL_LIGHTING)
+				if self.drawChildren:
+					for child in beam.children:
+						if DRAW_BACKPROJECTED:
+							child.drawBackProjected(self.meshFaces)
+						child.drawBeam((1, 1, 0))
 			
 			#Next draw the 2D projection scene on the right
 			dim = self.pixWidth - 800
 			glViewport(800, 0, dim, dim)
 			glScissor(800, 0, dim, dim)
-			self.beamTree.root.children[self.beamIndex].drawProjectedMeshFaces(self.meshFaces, dim, self.toggleDrawSplits)
+			if len(beam.children) > 0:
+				beam.children[0].drawProjectedMeshFaces(self.meshFaces, dim, self.toggleDrawSplits)
 				
 			glutSwapBuffers()
 	
@@ -235,6 +189,8 @@ class Viewer(object):
 			self.sceneTransparent = not self.sceneTransparent
 		elif key in ['b', 'B']:
 			self.beamIndex = (self.beamIndex + 1)%len(self.beamTree.root.children)
+		elif key in ['r', 'R']:
+			self.drawChildren = not self.drawChildren
 		#if key in ['e', 'E']:
 		#	self.drawEdges = 1 - self.drawEdges
 		#elif key in ['v', 'V']:
