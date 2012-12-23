@@ -583,6 +583,16 @@ class PolyMesh(object):
 	def Transform(self, matrix):
 		for v in self.vertices:
 			v.pos = matrix*v.pos
+	
+	def Translate(self, dV):
+		for v in self.vertices:
+			v.pos = v.pos + dV
+	
+	def Scale(self, dx, dy, dz):
+		for v in self.vertices:
+			v.pos.x = dx*v.pos.x
+			v.pos.y = dy*v.pos.y
+			v.pos.z = dz*v.pos.z
 
 	def getCentroid(self):
 		center = Vector3D(0.0, 0.0, 0.0)

@@ -474,7 +474,9 @@ def getFaceNormal(verts):
 		v1 = verts[i-1] - verts[0]
 		v2 = verts[i] - verts[0]
 		ret = v1 % v2
-		if ret.Length()/(v1.Length()*v2.Length()) > 1e-10:
+		v1L = v1.Length()
+		v2L = v2.Length()
+		if v1L > 0 and v2L > 0 and ret.Length()/(v1L*v2L) > 1e-10:
 			ret.normalize()
 			return ret
 	return None

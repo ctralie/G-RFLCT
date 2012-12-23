@@ -132,7 +132,17 @@ class Viewer(object):
 			rotMat = Matrix4([r.x, u.x, -t.x, 0, r.y, u.y, -t.y, 0, r.z, u.z, -t.z, 0, 0, 0, 0, 1])
 			rotMat = rotMat.Inverse()
 			self.mesh.Transform(rotMat)
+			centroid = self.mesh.getCentroid()
+			bbox = self.mesh.getBBox()
+			minZ = min([v.pos.z for v in self.mesh.vertices])
+			dV = -1*centroid
+			dV.z = -minZ
+			self.mesh.Translate(dV)
+			#scale = 1.0/max([bbox.XLen(), bbox.YLen(), bbox.ZLen()])
+			#self.mesh.Scale(scale, scale, scale)
 			self.camera.centerOnMesh(self.mesh)
+			print "minZ = %g"%(min([v.pos.z for v in self.mesh.vertices]))
+			print "centroid = %s"%self.mesh.getCentroid()
 		elif key in ['s', 'S']:
 			self.mesh.sliceBelowPlane(self.cutPlane.faces[0].getPlane())
 		elif key in ['t', 'T']:

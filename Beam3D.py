@@ -41,6 +41,7 @@ def getEPS(A, B, C):
 def PointsEqual2D(P1, P2, eps):
 	if (abs(P1.x-P2.x) < eps and abs(P1.y-P2.y) < eps):
 		return True
+	#print "P1 = %s, P2 = %s, abs(P1.x-P2.x) = %g, abs(P1.y - P2.y) = %g"%(P1, P2, abs(P1.x-P2.x), abs(P1.y-P2.y))
 	return False
 
 def CCW2D(A, B, C):
@@ -62,12 +63,12 @@ def CCW2D(A, B, C):
 	vBC = C - B
 	vAC.z = 0
 	vBC.z = 0
-	if (vAC.Dot(vBC) <= 0):
+	if (vAC.Dot(vBC) < eps):
 		return 0;#This fires for C in the closure of A and B (including endpoints)
 	vBA = A - B
 	vBA.z = 0
 	#C to the left of AB
-	if (vBA.Dot(vBC) > 0):
+	if (vBA.Dot(vBC) > eps):
 		return -2
 	#C to the right of AB
 	else:
@@ -495,6 +496,7 @@ def splitBeam(beam, face):
 		#from this face segment and the convex section of the beam it cuts off
 		if leftBeamIndex == -1 or rightBeamIndex == -1:
 			print "ERROR: Not all interesections were found while trying to split beam"
+			print "fP1 = %s, fP2 = %s"%(fP1, fP2)
 			if leftBeamIndex == -1:
 				print "ERROR: No left intersection found while trying to split beam"
 			if rightBeamIndex == -1:
@@ -613,7 +615,7 @@ class BeamTree(object):
 		#Next remove "beam" from its parent's children list since it's 
 		#no longer relevant and has been split into a bunch of pieces
 		#TODO: Make removing more efficient
-		#beam.parent.children.remove(beam)
+		beam.parent.children.remove(beam)
 		
 		return
 		#Now add the reflected beam as a child of the split front beam
@@ -625,10 +627,6 @@ class BeamTree(object):
 		reflectedBeam = Beam3D(mirrorP0, facePoints, frontBeam, beam.order+1, face)
 		frontBeam.children.append(reflectedBeam)
 		self.intersectBeam(reflectedBeam, self.allFaces, maxOrder)
-
-
-
-
 
 ######################################################
 
@@ -665,6 +663,17 @@ if __name__ == '__main__':
 		for P in SB:
 			print P
 		print "\n"	
+
+if __name__ == '__main__6':
+	fin = open("beam.dat", 'r')
+	beam = pickle.load(fin)
+	fin.close()
+	fin = open("faceInFront.dat", 'r')
+	faceInFront = pickle.load(fin)
+	fin.close()
+	[bP1, bP2, fP2] = [beam.frustPoints[0], beam.frustPoints[1], (faceInFront[0])[1]]
+	print "bP1 = %s, bP2 = %s, fP2 = %s"%(bP1, bP2, fP2)
+	print "%i"%CCW2D(bP1, bP2, fP2)
 
 #Test a simple beam projection and split case
 if __name__ == '__main__5':
