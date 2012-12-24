@@ -91,25 +91,12 @@ def CCW2D(A, B, C):
 #face: The face of the image plane (None if this is a root beam)
 #dummy: Used to construct the root of the beam tree
 class Beam3D(object):
-	def __init__(self, origin, frustVertices, parent = None, order = 0, face = None, dummy = False):
-		self.dummy = dummy
-		self.children = []
-		self.parent = parent
-		self.order = order
-		self.origin = origin
-		if dummy:
-			return
-		self.frustVertices = frustVertices
-		self.neardist = 0.01
-		self.face = face
-		if len(frustVertices) < 3:
-			print "ERROR: Only %i frustVertices on beam projection face"%len(frustVertices)
-			return
-		self.towards = getFaceNormal(frustVertices)
-		dV = frustVertices[0] - origin
+	def initMVMatrix(self, origin, points):
+		self.towards = getFaceNormal(points)
+		dV = points[0] - origin
 		if dV.Dot(self.towards) < 0:
 			self.towards = -1*self.towards
-		self.right = frustVertices[1] - frustVertices[0]
+		self.right = points[1] - points[0]
 		self.right.normalize()
 		self.up = self.right%self.towards
 		self.up.normalize()
@@ -119,10 +106,33 @@ class Beam3D(object):
 		#front of the beam are -z)
 		self.mvMatrix = getCameraMatrix(self.towards, self.up, self.right, self.origin)
 		self.mvMatrixInverse = self.mvMatrix.Inverse()
-		#Now calculate the near distance if the beam is associated with a face
+
+	def __init__(self, origin, frustVertices, parent = None, order = 0, face = None, dummy = False):
+		self.dummy = dummy
+		self.children = []
+		self.parent = parent
+		self.order = order
+		self.origin = origin
+		if dummy:
+			return
+		self.frustVertices = frustVertices
+		self.face = face
 		if face:
-			P = self.mvMatrix*frustVertices[0]
+			#If the image plane is a face
+			points = [V.pos for V in face.getVertices()]
+			if len(points) < 3:
+				print "ERROR: Only %i points on beam projection face"%len(points)
+				return
+			self.initMVMatrix(origin, points)
+			P = self.mvMatrix*points[0]
 			self.neardist = -P.z
+		else:
+			#If the beam is a root beam and there is no associated face
+			if len(frustVertices) < 3:
+				print "ERROR: Only %i frustVertices on beam projection face"%len(frustVertices)
+				return
+			self.initMVMatrix(origin, frustVertices)
+			self.neardist = 0.01
 		#Now map the frustum points to 2D image plane coordinates
 		self.frustPoints = self.projectPolygon(frustVertices, False)
 	
