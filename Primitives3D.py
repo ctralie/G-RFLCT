@@ -272,8 +272,8 @@ class Plane3D(object):
 
 	def initFromEquation(self, A, B, C, D):
 		self.N = Vector3D(A, B, C)
-		self.P0 = Point3D(A, B, D)
-		self.P0 = (-D/self.N.MagSquared())*self.P0
+		self.P0 = Point3D(A, B, C)
+		self.P0 = (-D/self.N.squaredMag())*self.P0
 		self.N.normalize()
 		self.resetEquation()
 
