@@ -1,0 +1,28 @@
+<EMScene>
+	<EMMaterials>
+		<material name = "reflective" R = "1.0" T = "0.0"/>
+		<material name = "absorptive" R = "0.0" T = "0.0"/>
+	</EMMaterials>
+	<OpticalMaterials>
+		<material name = "bluish" 
+			ka = "0.2 0.2 1"
+			kd = "0.5 0.5 1"
+			ks = "0.5 0.5 0.5"
+			kt = "0 0 0 "
+			emission = "0 0 0 "/>
+		<material name = "redish" 
+			ka = "1 0.2 0.2"
+			kd = "1 0.5 0.2"
+			ks = "0.5 0.5 0.5"
+			kt = "0 0 0 "
+			emission = "0 0 0 "/>
+	</OpticalMaterials>
+	<Source pos = "0 0 -2"/>
+	<Receiver pos = "0 0 2"/>
+	<box length = "3" width = "3" height = "3" center = "0 0 0">
+		1 0 0 0
+		0 1 0 0
+		0 0 1 0
+		0 0 0 1
+	</box>
+</EMScene>

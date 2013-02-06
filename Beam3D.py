@@ -28,7 +28,7 @@ def printMatlabPoly(poly, suffix = ""):
 #TODO: Update image sources pruning to make use of this class
 #Get the epsilon to be used for numerical precision
 def getEPS(A, B, C):
-	return 1e-7
+	return EPS
 	avgdx = (abs(A.x-B.x) + abs(A.x-C.x) + abs(B.x-C.x))/3.0
 	avgdy = (abs(A.y-B.y) + abs(A.y-C.y) + abs(B.y-C.y))/3.0
 	avgdz = (abs(A.z-B.z) + abs(A.z-C.z) + abs(B.z-C.z))/3.0
@@ -355,6 +355,7 @@ class Beam3D(object):
 				#Check every clipped point of face against the plane of otherFace
 				for v in vertices:
 					if plane.distFromPlane(v) > EPS:
+						print "plane.distFromPlane(v) = %g"%plane.distFromPlane(v)
 						#One of the points of this face is behind the plane
 						#of another face
 						faceInFront = False
@@ -604,7 +605,11 @@ def splitBeam(beam, face):
 class BeamTree(object):
 	#Construct all beams up to a maximum order of "maxOrder"
 	#allFaces is a list of mesh face objects in the scene in world coordinates
-	def __init__(self, origin, allFaces, maxOrder = 0):
+	#"beams" is a list of lists of vertices which represent beams that start
+	#at the origin.  If it is None,
+	#make an omnidirectional set of beams that start at the beam origin by
+	#making the beams go out each of 6 faces of a cube
+	def __init__(self, origin, allFaces, maxOrder = 0, beams = None):
 		self.allFaces = allFaces
 		self.origin = origin
 		#"root" is where the beam tree starts; it is a dummy beam
@@ -612,28 +617,33 @@ class BeamTree(object):
 		#that encompasses the full surface area possible
 		self.root = Beam3D(origin, [], None, 0, None, True)
 		roots = []
-		#Front Face
-		verts = [v+origin for v in [Point3D(-1, -1, 1), Point3D(1, -1, 1), Point3D(1, 1, 1), Point3D(-1, 1, 1)]]
-		roots.append(Beam3D(origin, verts, self.root))
-		if False:
-			#Back Face
-			verts.reverse()
-			verts = [v+Point3D(0, 0, -2) for v in verts]
+		if beams:
+			for verts in beams:
+				roots.append(Beam3D(origin, verts, self.root))
+		else:
+			#omnidirectional
+			#Front Face
+			verts = [v+origin for v in [Point3D(-1, -1, 1), Point3D(1, -1, 1), Point3D(1, 1, 1), Point3D(-1, 1, 1)]]
 			roots.append(Beam3D(origin, verts, self.root))
-			#Left Face
-			verts = [v+origin for v in [Point3D(-1, -1, -1), Point3D(-1, -1, 1), Point3D(-1, 1, 1), Point3D(-1, 1, -1)]]
-			roots.append(Beam3D(origin, verts, self.root))
-			#Right Face
-			verts.reverse()
-			verts = [v+Point3D(2, 0, 0) for v in verts]
-			roots.append(Beam3D(origin, verts, self.root))
-			#Top Face
-			verts = [v+origin for v in [Point3D(-1, 1, 1), Point3D(1, 1, 1), Point3D(1, 1, -1), Point3D(-1, 1, -1)]]
-			roots.append(Beam3D(origin, verts, self.root))
-			#Bottom face
-			verts.reverse()
-			verts = [v+Point3D(0, -2, 0) for v in verts]
-			roots.append(Beam3D(origin, verts, self.root))
+			if False:#For now just look at front face for debugging
+				#Back Face
+				verts.reverse()
+				verts = [v+Point3D(0, 0, -2) for v in verts]
+				roots.append(Beam3D(origin, verts, self.root))
+				#Left Face
+				verts = [v+origin for v in [Point3D(-1, -1, -1), Point3D(-1, -1, 1), Point3D(-1, 1, 1), Point3D(-1, 1, -1)]]
+				roots.append(Beam3D(origin, verts, self.root))
+				#Right Face
+				verts.reverse()
+				verts = [v+Point3D(2, 0, 0) for v in verts]
+				roots.append(Beam3D(origin, verts, self.root))
+				#Top Face
+				verts = [v+origin for v in [Point3D(-1, 1, 1), Point3D(1, 1, 1), Point3D(1, 1, -1), Point3D(-1, 1, -1)]]
+				roots.append(Beam3D(origin, verts, self.root))
+				#Bottom face
+				verts.reverse()
+				verts = [v+Point3D(0, -2, 0) for v in verts]
+				roots.append(Beam3D(origin, verts, self.root))
 		#Start the recursion on each one of these sub beams
 		for beam in roots:
 			self.root.children.append(beam)
