@@ -90,6 +90,7 @@ def CCW2D(A, B, C):
 #has reflected off of one face already
 #face: The face of the image plane (None if this is a root beam)
 #dummy: Used to construct the root of the beam tree
+#terminalFace: The face on which this beam terminates
 class Beam3D(object):
 	def initMVMatrix(self, origin, points):
 		self.towards = getFaceNormal(points)
@@ -107,7 +108,7 @@ class Beam3D(object):
 		self.mvMatrix = getCameraMatrix(self.towards, self.up, self.right, self.origin)
 		self.mvMatrixInverse = self.mvMatrix.Inverse()
 
-	def __init__(self, origin, frustVertices, parent = None, order = 0, face = None, dummy = False):
+	def __init__(self, origin, frustVertices, parent = None, order = 0, face = None, dummy = False, terminalFace = None):
 		self.dummy = dummy
 		self.children = []
 		self.parent = parent
@@ -117,6 +118,7 @@ class Beam3D(object):
 			return
 		self.frustVertices = frustVertices
 		self.face = face
+		self.terminalFace = terminalFace
 		if face:
 			#If the image plane is a face
 			points = [V.pos for V in face.getVertices()]
@@ -434,11 +436,17 @@ class Beam3D(object):
 		glEnable(GL_LIGHTING)
 	
 	#Draw the beam in space as a transparent object
-	def drawBeam(self, color = (0, 1, 0), beamTrans = 0.3):
+	def drawBeam(self, color = None, beamTrans = 0.3):
+		colormap = [(0, 1, 0), (1, 1, 0), (0, 1, 1), (0, 0, 1)]
 		glDisable(GL_LIGHTING)
 		glEnable(GL_BLEND)
 		glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA)
 		
+		c = color
+		#If the color is not specified, use a colormap which color codes the 
+		#sections of the beam based on what order they are
+		if not c:
+			c = colormap[self.order%len(colormap)]
 		P0 = self.origin
 		Points = self.frustVertices
 
@@ -447,7 +455,7 @@ class Beam3D(object):
 			#PointsStart are the points on the imaging face, and Points
 			#are the points at the end of the beam
 			PointsStart = [self.mvMatrixInverse*P for P in self.frustPoints]
-			glColor4f(color[0], color[1], color[2], beamTrans)
+			glColor4f(c[0], c[1], c[2], beamTrans)
 			for i1 in range(0, len(Points)):
 				glBegin(GL_POLYGON)
 				i2 = (i1+1)%len(Points)
@@ -465,7 +473,7 @@ class Beam3D(object):
 			glEnd()
 		else:
 			#The beam is a root beam and starts at a point
-			glColor4f(color[0], color[1], color[2], beamTrans)
+			glColor4f(c[0], c[1], c[2], beamTrans)
 			glBegin(GL_TRIANGLES)
 			for i in range(0, len(Points)):
 				P1 = Points[i]
@@ -484,6 +492,8 @@ class Beam3D(object):
 
 		glDisable(GL_BLEND)
 		glEnable(GL_LIGHTING)
+		if self.order > 0:
+			self.parent.drawBeam(color, beamTrans)
 	
 	#Draw outlines of shapes clipped to this beam in 3D
 	def drawBackProjected(self, faces):
@@ -682,6 +692,7 @@ class BeamTree(object):
 		face = faceInFront[2]
 		#First generate split beam and add it to the list of children
 		frontBeam = Beam3D(beam.origin, facePoints, beam.parent, beam.order, beam.face)
+		frontBeam.terminalFace = face
 		beam.parent.children.append(frontBeam)
 		#Next remove "beam" from its parent's children list since it's 
 		#no longer relevant and has been split into a bunch of pieces
@@ -697,7 +708,37 @@ class BeamTree(object):
 		reflectedBeam = Beam3D(mirrorP0, facePoints, frontBeam, beam.order+1, face)
 		frontBeam.children.append(reflectedBeam)
 		self.intersectBeam(reflectedBeam, self.allFaces, maxOrder)
+	
+	#faces: The faces this beam should intersect in order
+	#If an element of faces is "None", then treat that as a wildcard
+	def getBeamsIntersectingFaces(self, faces):
+		matchedBeams = []
+		beamsToCheck = self.root.children[:]
+		while len(beamsToCheck) > 0:
+			thisbeam = beamsToCheck.pop()
+			beamIsValid = False
+			if not faces[thisbeam.order]:
+				beamIsValid = True
+			elif faces[thisbeam.order] == thisbeam.terminalFace:
+				beamIsValid = True
+			if beamIsValid:
+				if thisbeam.order == len(faces) - 1:
+					matchedBeams.append(thisbeam)
+				else:
+					beamsToCheck = beamsToCheck + thisbeam.children
+		return matchedBeams
+	
+	#Return an array of arrays of points that represent the faces
+	#of the beam path 
+	def extractBeamToOrigin(self, beam):
+		print "TODO"
+	
+	#"point" is a point on a face of the beam.  This function will
+	#return a set of line segments that represent a specular path
+	#from this point on the terminal face of the beam back to the
+	#origin
+	def extractPathToOrigin(self, beam, point):
+		print "TODO"
 
 ######################################################
-
 

@@ -13,17 +13,6 @@ from sys import argv
 DRAW_BACKPROJECTED = True
 KEYDELTA = 0.01
 
-def splitIntoRGBA(val):
-	A = (0xff000000&val)>>24
-	R = (0x00ff0000&val)>>16
-	G = (0x0000ff00&val)>>8
-	B = (0x000000ff&val)
-	return [R, G, B, A]
-
-def extractFromRGBA(R, G, B, A):
-	A = 0
-	return (((A<<24)&0xff000000) | ((R<<16)&0x00ff0000) | ((G<<8)&0x0000ff00) | (B&0x000000ff))
-
 class Viewer(object):
 	def updateCameraVars(self):
 		self.yfov = self.camera.yfov
@@ -32,20 +21,36 @@ class Viewer(object):
 		self.farDist = 100.0
 		self.xScale = math.tan(self.xfov/2.0)
 		self.yScale = math.tan(self.yfov/2.0)
-		self.pickingFace = False
 
 	def initBeamTreeAtPos(self):
 		beamWidth = 50*math.pi/180
 		orig = self.beamOrigin
 		self.scene.Source = orig
 		delt = math.tan(beamWidth/2.0)
+		#def rotateAroundAxis(P0, axis, theta, V)
 		beamVerts = [orig + Vector3D(-delt, -delt, -1), orig + Vector3D(delt, -delt, -1), orig + Vector3D(delt, delt, -1), orig + Vector3D(-delt, delt, -1)]
+		#Rotate the beam 45 degrees
+		for i in range(0, len(beamVerts)):
+			beamVerts[i] = rotateAroundAxis(orig, Vector3D(0, 1, 0), -math.pi/4, beamVerts[i])
 		self.beamTree = BeamTree(self.scene.Source, self.meshFaces, 1, [beamVerts])
+
+	def recalculateBeams(self):
+		self.beamsToDraw = []
+		if self.drawRightBeams:
+			path = [self.meshFaces[1], self.meshFaces[3]]
+			self.beamsToDraw = self.beamsToDraw + self.beamTree.getBeamsIntersectingFaces(path)
+		if self.drawBottomBeams:
+			path = [self.meshFaces[4], self.meshFaces[3]]
+			self.beamsToDraw = self.beamsToDraw + self.beamTree.getBeamsIntersectingFaces(path)
+		if self.drawDirectBeams:
+			path = [self.meshFaces[3]]
+			newBeams = self.beamTree.getBeamsIntersectingFaces(path)
+			self.beamsToDraw = self.beamsToDraw + newBeams
 
 	def __init__(self, filename):
 		#GLUT State variables
 		self.pixHeight = 800
-		self.pixWidth = 1600
+		self.pixWidth = 800
 		self.GLUTmouse = [0, 0]
 		self.GLUTButton = [0, 0, 0, 0, 0]
 		self.GLUTModifiers = 0
@@ -61,15 +66,14 @@ class Viewer(object):
 		for mesh in self.scene.meshes:
 			self.meshFaces = self.meshFaces + mesh.faces
 		
-		self.selectedFace = None
-		self.drawBeam = True
-		self.drawChildren = True
-		self.beamIndex = 0
 		self.sceneTransparent = True
-		self.toggleDrawSplits = False
 		self.beamTrans = 0.3 #Beam transparency
 		self.beamOrigin = Point3D(1.5, -1.5, -1.5) + Vector3D(-0.85, 0.95, 1.8288)
 		self.initBeamTreeAtPos()
+		self.drawRightBeams = False
+		self.drawBottomBeams = False
+		self.drawDirectBeams = False
+		self.beamsToDraw = []
 		
 		self.initGL()
 
@@ -83,9 +87,7 @@ class Viewer(object):
 		glutPostRedisplay()
 
 	def GLUTRedraw(self):
-		N = len(self.meshFaces)
-		[Rclear, Gclear, Bclear, Aclear] = splitIntoRGBA(N)
-		glClearColor(Rclear, Gclear, Bclear, Aclear)
+		glClearColor(0, 0, 0, 1)
 		glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT)
 		
 		#First draw the 3D beam scene on the left
@@ -96,86 +98,31 @@ class Viewer(object):
 		gluPerspective(180.0*self.camera.yfov/math.pi, 1.0, 0.01, 100.0)
 		
 		self.camera.gotoCameraFrame()
-		if self.pickingFace:
-			self.pickFace()
-		else:
-			glLightfv(GL_LIGHT0, GL_POSITION, [3.0, 4.0, 5.0, 0.0]);
-			glLightfv(GL_LIGHT1, GL_POSITION,  [-3.0, -2.0, -3.0, 0.0]);
-		
-			glEnable(GL_LIGHTING)
-			
-			if self.sceneTransparent:
-				glDisable(GL_DEPTH_TEST)
-			else:
-				glEnable(GL_DEPTH_TEST)
-			self.scene.renderGL()
-			
-			if self.selectedFace:
-				glDisable(GL_LIGHTING)
-				glDisable(GL_DEPTH_TEST)
-				glColor3f(1, 0, 0)
-				self.selectedFace.drawBorder()
-				glEnable(GL_DEPTH_TEST)
-			
-			if self.scene.Source:
-				glDisable(GL_LIGHTING)
-				glColor3f(1, 0, 0)
-				P = self.scene.Source
-				quadric = gluNewQuadric()
-				glPushMatrix()
-				glTranslatef(P.x, P.y, P.z)
-				gluSphere(quadric, 0.1, 32, 32)
-				glPopMatrix()
-			
-			if self.drawBeam:
-				beam = self.beamTree.root.children[self.beamIndex]
-				beam.drawBeam()
-				
-				if self.drawChildren:
-					for child in beam.children:
-						if DRAW_BACKPROJECTED:
-							child.drawBackProjected(self.meshFaces)
-						child.drawBeam((1, 1, 0))
-			
-			#Next draw the 2D projection scene on the right
-			dim = self.pixWidth - 800
-			glViewport(800, 0, dim, dim)
-			glScissor(800, 0, dim, dim)
-			if len(beam.children) > 0:
-				beam.children[0].drawProjectedMeshFaces(self.meshFaces, dim, self.toggleDrawSplits)
-				
-			glutSwapBuffers()
+		glLightfv(GL_LIGHT0, GL_POSITION, [3.0, 4.0, 5.0, 0.0]);
+		glLightfv(GL_LIGHT1, GL_POSITION,  [-3.0, -2.0, -3.0, 0.0]);
 	
-	def pickFace(self):
-		glDisable(GL_LIGHTING)
-		N = len(self.meshFaces)
-		for i in range(0, len(self.meshFaces)):
-			face = self.meshFaces[i]
-			[R, G, B, A] = splitIntoRGBA(i)
-			glColor4ub(R, G, B, A)
-			face.drawFilled()
-		glutSwapBuffers()
-		[xdim, ydim] = [self.pixWidth, self.pixHeight]
-		pixels = glReadPixelsb(0, 0, 800, 800, GL_RGBA, GL_UNSIGNED_BYTE)
-		#im = Image.new("RGB", (800, 800))
-		#pix = im.load()
-		#for x in range(0, 800):
-		#	for y in range(0, 800):
-		#		pix[x, y] = (pixels[x][y][0], pixels[x][y][1], pixels[x][y][2])
-		#im.save("out.png")
-		#print len(pixels)
-		#print len(pixels[0])
-		[x, y] = [self.GLUTmouse[0], self.GLUTmouse[1]]
-		pixel = pixels[y][x]
-		faceIndex = extractFromRGBA(pixel[0], pixel[1], pixel[2], pixel[3])
-		if faceIndex < N:
-			self.selectedFace = self.meshFaces[faceIndex]
+		glEnable(GL_LIGHTING)
+		
+		if self.sceneTransparent:
+			glDisable(GL_DEPTH_TEST)
 		else:
-			print "ERROR: No face exists at that location (faceIndex %i)"%faceIndex
-			[R, G, B, A] = splitIntoRGBA(faceIndex)
-			print "(R, G, B, A) = (%i, %i, %i, %i)"%(R, G, B, A)
-		self.pickingFace = False
-		glutPostRedisplay()
+			glEnable(GL_DEPTH_TEST)
+		self.scene.renderGL()
+		
+		if self.scene.Source:
+			glDisable(GL_LIGHTING)
+			glColor3f(1, 0, 0)
+			P = self.scene.Source
+			quadric = gluNewQuadric()
+			glPushMatrix()
+			glTranslatef(P.x, P.y, P.z)
+			gluSphere(quadric, 0.1, 32, 32)
+			glPopMatrix()
+		
+		for beam in self.beamsToDraw:
+			beam.drawBeam()	
+			
+		glutSwapBuffers()
 	
 	def handleMouseStuff(self, x, y):
 		y = self.pixHeight - y
@@ -193,32 +140,39 @@ class Viewer(object):
 		self.keys[key] = False
 		if key == ' ':
 			self.drawBeam = not self.drawBeam
-		elif key in ['s', 'S']:
-			self.toggleDrawSplits = not self.toggleDrawSplits
 		elif key in ['t', 'T']:
 			self.sceneTransparent = not self.sceneTransparent
-		elif key in ['b', 'B']:
-			self.beamIndex = (self.beamIndex + 1)%len(self.beamTree.root.children)
-		elif key in ['r', 'R']:
-			self.drawChildren = not self.drawChildren
 		#WASD Key control of beam origin
 		elif key in ['a', 'A']:
 			self.beamOrigin = self.beamOrigin + KEYDELTA*Vector3D(-1, 0, 0)
 			self.initBeamTreeAtPos()
+			self.recalculateBeams()
 		elif key in ['d', 'D']:
 			self.beamOrigin = self.beamOrigin + KEYDELTA*Vector3D(1, 0, 0)
 			self.initBeamTreeAtPos()
+			self.recalculateBeams()
 		elif key in ['w', 'W']:
 			self.beamOrigin = self.beamOrigin + KEYDELTA*Vector3D(0, 1, 0)
 			self.initBeamTreeAtPos()
+			self.recalculateBeams()
 		elif key in ['s', 'S']:
 			self.beamOrigin = self.beamOrigin + KEYDELTA*Vector3D(0, -1, 0)
 			self.initBeamTreeAtPos()
+			self.recalculateBeams()
+		elif key in ['r', 'R']:
+			#Draw beams that bounce from the right wall to the back wall
+			self.drawRightBeams = not self.drawRightBeams
+			self.recalculateBeams()
+		elif key in ['b', 'B']:
+			self.drawBottomBeams = not self.drawBottomBeams
+			self.recalculateBeams()
+		elif key in ['o', 'O']:
+			self.drawDirectBeams = not self.drawDirectBeams
+			self.recalculateBeams()
 		#if key in ['e', 'E']:
 		#	self.drawEdges = 1 - self.drawEdges
 		#elif key in ['v', 'V']:
 		#	self.drawVerts = 1 - self.drawVerts
-			
 		glutPostRedisplay()
 	
 	def GLUTSpecial(self, key, x, y):
@@ -236,8 +190,6 @@ class Viewer(object):
 		self.handleMouseStuff(x, y)
 		if state == GLUT_DOWN:
 			self.GLUTButton[buttonMap[button]] = 1
-			if button == GLUT_MIDDLE_BUTTON:
-				self.pickingFace = True
 		else:
 			self.GLUTButton[buttonMap[button]] = 0
 		glutPostRedisplay()
