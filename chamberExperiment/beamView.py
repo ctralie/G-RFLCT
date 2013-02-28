@@ -38,7 +38,13 @@ class Viewer(object):
 		self.beamsToDraw = []
 		if self.drawRightBeams:
 			path = [self.meshFaces[1], self.meshFaces[3]]
-			self.beamsToDraw = self.beamsToDraw + self.beamTree.getBeamsIntersectingFaces(path)
+			toAdd = self.beamTree.getBeamsIntersectingFaces(path)
+			self.beamsToDraw = self.beamsToDraw + toAdd
+			if len(toAdd) > 0:
+				beam = toAdd[0]
+				face = beam.terminalFace
+				P = face.getCentroid()
+				self.path = self.beamTree.extractPathToOrigin(beam, P)		
 		if self.drawBottomBeams:
 			path = [self.meshFaces[4], self.meshFaces[3]]
 			self.beamsToDraw = self.beamsToDraw + self.beamTree.getBeamsIntersectingFaces(path)
@@ -74,6 +80,7 @@ class Viewer(object):
 		self.drawBottomBeams = False
 		self.drawDirectBeams = False
 		self.beamsToDraw = []
+		self.path = []
 		
 		self.initGL()
 
@@ -121,7 +128,17 @@ class Viewer(object):
 		
 		for beam in self.beamsToDraw:
 			beam.drawBeam()	
-			
+		
+		glDisable(GL_LIGHTING)
+		glColor3f(1, 0, 0)
+		glBegin(GL_LINES)
+		for i in range(0, len(self.path)-1):
+			P0 = self.path[i]
+			P1 = self.path[(i+1)]
+			glVertex3f(P0.x, P0.y, P0.z)
+			glVertex3f(P1.x, P1.y, P1.z)
+		glEnd()
+		
 		glutSwapBuffers()
 	
 	def handleMouseStuff(self, x, y):

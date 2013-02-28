@@ -610,7 +610,6 @@ def splitBeam(beam, face):
 			cutBeamPoints.append(leftIntersection)
 		beamPoints = cutBeamPoints
 	return newBeams
-		
 
 class BeamTree(object):
 	#Construct all beams up to a maximum order of "maxOrder"
@@ -727,18 +726,56 @@ class BeamTree(object):
 				else:
 					beamsToCheck = beamsToCheck + thisbeam.children
 		return matchedBeams
-	
+
 	#Return an array of arrays of points that represent the faces
 	#of the beam path 
 	def extractBeamToOrigin(self, beam):
 		print "TODO"
-	
+
 	#"point" is a point on a face of the beam.  This function will
 	#return a set of line segments that represent a specular path
 	#from this point on the terminal face of the beam back to the
 	#origin
 	def extractPathToOrigin(self, beam, point):
+		#First generate all virtual images
+		beamParts = [beam]
+		while beamParts[-1].order > 0:
+			beamParts.append(beamParts[-1].parent)
+		beamParts.reverse()
+		images = [None]*(beam.order+1)
+		images[0] = self.origin
+		for i in range(1, len(images)):
+			P0 = images[i-1]
+			face = beamParts[i-1].terminalFace
+			faceNormal = face.getNormal()
+			facePoint = face.startV.pos
+			dV = facePoint - P0
+			perpFaceV = faceNormal.proj(dV)
+			parFaceV = faceNormal.projPerp(dV)
+			mirrorP0 = facePoint + parFaceV - perpFaceV
+			images[i] = mirrorP0
+		images = images[1:]
+		path = [point]
+		i = len(images) - 1
+		while i >= 0:
+			V = path[-1] - images[i]
+			ray = Ray3D(images[i], V)
+			print ray
+			plane = beamParts[i].terminalFace.getPlane()
+			print beamParts[i].terminalFace.startV.pos
+			[t, P] = ray.intersectPlane(plane)
+			print "t = %g, P = %s"%(t, P)
+			path.append(P)
+			i = i - 1
+		path.reverse()
+		path = [self.origin] + path
+		for P in path:
+			print P
+		return path
+
+	#Return an image that holds the interference pattern on the face "face"
+	#due to beams
+	def getInterferencePatternOnFace(face, beams):
 		print "TODO"
 
 ######################################################
-
