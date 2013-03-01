@@ -749,7 +749,7 @@ class BeamTree(object):
 			face = beamParts[i-1].terminalFace
 			faceNormal = face.getNormal()
 			facePoint = face.startV.pos
-			dV = facePoint - P0
+			dV = P0 - facePoint
 			perpFaceV = faceNormal.proj(dV)
 			parFaceV = faceNormal.projPerp(dV)
 			mirrorP0 = facePoint + parFaceV - perpFaceV
@@ -760,11 +760,8 @@ class BeamTree(object):
 		while i >= 0:
 			V = path[-1] - images[i]
 			ray = Ray3D(images[i], V)
-			print ray
 			plane = beamParts[i].terminalFace.getPlane()
-			print beamParts[i].terminalFace.startV.pos
 			[t, P] = ray.intersectPlane(plane)
-			print "t = %g, P = %s"%(t, P)
 			path.append(P)
 			i = i - 1
 		path.reverse()
