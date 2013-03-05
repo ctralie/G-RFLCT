@@ -8,6 +8,7 @@ from Cameras3D import *
 from EMScene import *
 from Beam3D import *
 import Image
+import matplotlib.pyplot as plt
 from sys import argv
 
 DRAW_BACKPROJECTED = True
@@ -186,6 +187,11 @@ class Viewer(object):
 		elif key in ['o', 'O']:
 			self.drawDirectBeams = not self.drawDirectBeams
 			self.recalculateBeams()
+		elif key in ['p', 'P']:
+			#Calculate and display interference pattern
+			pattern = self.beamTree.getInterferencePatternOnFace(self.meshFaces[3], self.beamsToDraw, 400, 400, 10e9)
+			plt.imshow(pattern)
+			plt.show()
 		#if key in ['e', 'E']:
 		#	self.drawEdges = 1 - self.drawEdges
 		#elif key in ['v', 'V']:

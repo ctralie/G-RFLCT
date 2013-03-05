@@ -4,6 +4,7 @@ from Graphics3D import *
 from PolyMesh import *
 from Cameras3D import *
 from OpenGL.GL import *
+import numpy as np
 import math
 import pickle
 
@@ -766,13 +767,84 @@ class BeamTree(object):
 			i = i - 1
 		path.reverse()
 		path = [self.origin] + path
-		for P in path:
-			print P
 		return path
 
 	#Return an image that holds the interference pattern on the face "face"
 	#due to beams
-	def getInterferencePatternOnFace(face, beams):
-		print "TODO"
+	#resx and resy are the number of samples in x and y, respectively, to take
+	#freq is the frequency of the propagating wave (used to compute phase)
+	def getInterferencePatternOnFace(self, face, beams, resx, resy, freq):
+		wavelen = 3.0e8/freq
+		#First construct a modelview matrix which transforms points on the plane
+		#of the face into a coordinate system where Z = 0 on the plane
+		towards = face.getNormal()
+		verts = [v.pos for v in face.getVertices()]
+		right = verts[1] - verts[0]
+		towards.normalize()
+		right.normalize()
+		up = right % towards
+		mvMatrix = getCameraMatrix(towards, up, right, verts[0])
+		mvMatrixInverse = mvMatrix.Inverse()
+		#Now calculate a 2D bounding box based on the vertices of the face
+		#which will determine the area where the pattern is calculated
+		facePoints2D = [mvMatrix*P for P in verts]
+		for P in facePoints2D:
+			print P
+		bbox = BBox3D(0, 0, 0, 0, 0, 0)
+		for P in facePoints2D:
+			bbox.addPoint(P)
+		if bbox.zmin < -EPS or bbox.zmax > EPS:
+			print "ERROR: Plane transformation for interference pattern zmin = %g, zmax = %g"%(bbox.zmin, bbox.zmax)
+		print bbox
+		xstart = float(bbox.xmin)
+		xend = float(bbox.xmax)
+		ystart = float(bbox.ymin)
+		yend = float(bbox.ymax)
+		dx = (xend - xstart) / (resx - 1)
+		dy = (yend - ystart) / (resy - 1)
+		#Transform each of the beams' terminating face points into the plane coordinate system
+		beamPoints2D = [[None]]*len(beams)
+		for k in range(0, len(beams)):
+			beamPoints2D[k] = [mvMatrix*P for P in beams[k].frustVertices]
+			for i in range(0, len(beamPoints2D)-2):
+				P0 = (beamPoints2D[k])[i]
+				P1 = (beamPoints2D[k])[i+1]
+				P2 = (beamPoints2D[k])[(i+2)%len(beamPoints2D)]
+				ccw = CCW2D(P0, P1, P2)
+				if ccw == 1:
+					beamPoints2D[k].reverse()
+					break
+		#Now loop through and fill in the pattern
+		pattern = np.zeros((resy, resx))
+		for yi in range(0, resy):
+			y = ystart + yi*dy
+			for xi in range(0, resx):
+				#TODO: Implement phasor addition from antenna response here
+				phase = 0.0
+				x = xstart + xi*dx
+				P = Point3D(x, y, 0)
+				PWorld = mvMatrixInverse*P
+				#For every beam, check to see if the point (x, y) is inside of
+				#that beam's terminating face
+				for k in range(0, len(beams)):
+					beam = beams[k]
+					points = beamPoints2D[k]
+					inside = True
+					for i in range(0, len(points)):
+						P0 = points[i]
+						P1 = points[(i+1)%len(points)]
+						if CCW2D(P0, P1, P) == 1:
+							inside = False
+							break
+					if inside:
+						path = self.extractPathToOrigin(beam, PWorld)
+						pathLength = 0.0
+						for i in range(1, len(path)):
+							dV = path[i] - path[i-1]
+							pathLength = pathLength + dV.Length()
+							phase = phase + 2*math.pi*pathLength/wavelen
+				phase = phase % (2*math.pi)
+				pattern[yi, xi] = phase
+		return pattern
 
 ######################################################
