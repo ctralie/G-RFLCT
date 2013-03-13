@@ -768,6 +768,28 @@ class BeamTree(object):
 		path.reverse()
 		path = [self.origin] + path
 		return path
+	
+	#Return the image of the source of the beam tree reflected across
+	#all faces until it gets to "beam"'s face
+	def getImageSource(self, beam):
+		#First generate all virtual images
+		beamParts = [beam]
+		while beamParts[-1].order > 0:
+			beamParts.append(beamParts[-1].parent)
+		beamParts.reverse()
+		images = [None]*(beam.order+1)
+		images[0] = self.origin
+		for i in range(1, len(images)):
+			P0 = images[i-1]
+			face = beamParts[i-1].terminalFace
+			faceNormal = face.getNormal()
+			facePoint = face.startV.pos
+			dV = P0 - facePoint
+			perpFaceV = faceNormal.proj(dV)
+			parFaceV = faceNormal.projPerp(dV)
+			mirrorP0 = facePoint + parFaceV - perpFaceV
+			images[i] = mirrorP0
+		return images[-1]
 
 	#Return an image that holds the interference pattern on the face "face"
 	#due to beams
@@ -814,13 +836,16 @@ class BeamTree(object):
 				if ccw == 1:
 					beamPoints2D[k].reverse()
 					break
+		#Precompute the image sources for each face
+		imageSources = [self.getImageSource(beam) for beam in beams]
 		#Now loop through and fill in the pattern
 		pattern = np.zeros((resy, resx))
 		for yi in range(0, resy):
 			y = ystart + yi*dy
 			for xi in range(0, resx):
 				#TODO: Implement phasor addition from antenna response here
-				phase = 0.0
+				RealResp = 0
+				ImagResp = 0
 				x = xstart + xi*dx
 				P = Point3D(x, y, 0)
 				PWorld = mvMatrixInverse*P
@@ -828,6 +853,7 @@ class BeamTree(object):
 				#that beam's terminating face
 				for k in range(0, len(beams)):
 					beam = beams[k]
+					imageSource = imageSources[k]
 					points = beamPoints2D[k]
 					inside = True
 					for i in range(0, len(points)):
@@ -837,13 +863,14 @@ class BeamTree(object):
 							inside = False
 							break
 					if inside:
-						path = self.extractPathToOrigin(beam, PWorld)
-						pathLength = 0.0
-						for i in range(1, len(path)):
-							dV = path[i] - path[i-1]
-							pathLength = pathLength + dV.Length()
-							phase = phase + 2*math.pi*pathLength/wavelen
-				phase = phase % (2*math.pi)
+						#TODO: Maybe the exact paths will be more important later
+						#instead of just the virtual image paths?
+						dV = PWorld - imageSource
+						pathLength = dV.Length()
+						theta = 2*math.pi*pathLength/wavelen
+						RealResp = RealResp + math.cos(theta)
+						ImagResp = ImagResp + math.sin(theta)
+				phase = math.atan2(ImagResp, RealResp)
 				pattern[yi, xi] = phase
 		return pattern
 

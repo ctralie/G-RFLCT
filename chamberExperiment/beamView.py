@@ -130,15 +130,16 @@ class Viewer(object):
 		for beam in self.beamsToDraw:
 			beam.drawBeam()	
 		
-		glDisable(GL_LIGHTING)
-		glColor3f(1, 0, 0)
-		glBegin(GL_LINES)
-		for i in range(0, len(self.path)-1):
-			P0 = self.path[i]
-			P1 = self.path[(i+1)]
-			glVertex3f(P0.x, P0.y, P0.z)
-			glVertex3f(P1.x, P1.y, P1.z)
-		glEnd()
+		if False:
+			glDisable(GL_LIGHTING)
+			glColor3f(1, 0, 0)
+			glBegin(GL_LINES)
+			for i in range(0, len(self.path)-1):
+				P0 = self.path[i]
+				P1 = self.path[(i+1)]
+				glVertex3f(P0.x, P0.y, P0.z)
+				glVertex3f(P1.x, P1.y, P1.z)
+			glEnd()
 		
 		glutSwapBuffers()
 	
