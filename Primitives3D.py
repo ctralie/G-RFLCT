@@ -501,8 +501,8 @@ def COSBetween(Vertex, P1, P2):
 	V1 = P1 - Vertex
 	V2 = P2 - Vertex
 	dot = V1.Dot(V2)
-	magProduct = sqrt(V1.squaredMag()*V2.squaredMag())
-	if (magProduct < EPS)
+	magProduct = math.sqrt(V1.squaredMag()*V2.squaredMag())
+	if (magProduct < EPS):
 		return 0
 	return dot / magProduct
 
