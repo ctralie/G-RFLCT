@@ -495,6 +495,17 @@ def getPolygonArea(verts):
 		area = area + 0.5*(v1%v2).Length()
 	return area
 
+#Return the cosine of the angle between P1 and P2 with respect
+#to "Vertex" as their common, shared vertex
+def COSBetween(Vertex, P1, P2):
+	V1 = P1 - Vertex
+	V2 = P2 - Vertex
+	dot = V1.Dot(V2)
+	magProduct = sqrt(V1.squaredMag()*V2.squaredMag())
+	if (magProduct < EPS)
+		return 0
+	return dot / magProduct
+
 if __name__ == '__main__':
 	m = Matrix4([0, 1, 0, 0, 0, 0, 1, 2, 1, 0, 0, 0, 0, 0, 0, 1])
 	print m

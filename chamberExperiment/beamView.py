@@ -38,7 +38,7 @@ class Viewer(object):
 	def recalculateBeams(self):
 		self.beamsToDraw = []
 		if self.drawRightBeams:
-			path = [self.meshFaces[1], self.meshFaces[3]]
+			path = [self.meshFaces[1], self.meshFaces[2]]
 			toAdd = self.beamTree.getBeamsIntersectingFaces(path)
 			self.beamsToDraw = self.beamsToDraw + toAdd
 			if len(toAdd) > 0:
@@ -47,10 +47,10 @@ class Viewer(object):
 				P = face.getCentroid()
 				self.path = self.beamTree.extractPathToOrigin(beam, P)		
 		if self.drawBottomBeams:
-			path = [self.meshFaces[4], self.meshFaces[3]]
+			path = [self.meshFaces[3], self.meshFaces[2]]
 			self.beamsToDraw = self.beamsToDraw + self.beamTree.getBeamsIntersectingFaces(path)
 		if self.drawDirectBeams:
-			path = [self.meshFaces[3]]
+			path = [self.meshFaces[2]]
 			newBeams = self.beamTree.getBeamsIntersectingFaces(path)
 			self.beamsToDraw = self.beamsToDraw + newBeams
 
@@ -190,7 +190,7 @@ class Viewer(object):
 			self.recalculateBeams()
 		elif key in ['p', 'P']:
 			#Calculate and display interference pattern
-			pattern = self.beamTree.getInterferencePatternOnFace(self.meshFaces[3], self.beamsToDraw, 400, 400, 10e9)
+			pattern = self.beamTree.getInterferencePatternOnFace(self.meshFaces[2], self.beamsToDraw, 1200, 1200, 10e9)
 			plt.imshow(pattern)
 			plt.show()
 		#if key in ['e', 'E']:
