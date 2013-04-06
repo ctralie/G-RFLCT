@@ -506,31 +506,6 @@ def COSBetween(Vertex, P1, P2):
 		return 0
 	return float(dot) / float(magProduct)
 
-#Find the intersection of two lines segments in a numerically stable
-#way by looking at them parametrically
-def intersectSegments2D(A, B, C, D, countEndpoints = True):
-	denomDet = (D.x-C.x)*(A.y-B.y) - (D.y-C.y)*(A.x-B.x)
-	if (denomDet == 0): #Segments are parallel
-		return None
-	num_t = (A.x-C.x)*(A.y-B.y) - (A.y-C.y)*(A.x-B.x);
-	num_s = (D.x-C.x)*(A.y-C.y) - (D.y-C.y)*(A.x-C.x);
-	t = float(num_t) / float(denomDet)
-	s = float(num_s) / float(denomDet)
-	if (s < 0 or s > 1):
-		return None #Intersection not within the bounds of segment 1
-	if (t < 0 or t > 1):
-		return None #Intersection not within the bounds of segment 2
-
-	#Don't count intersections that occur at the endpoints of both segments
-	#if the user so chooses
-	if ((t == 0 or t == 1) and (s == 0 or s == 1) and (not countEndpoints)):
-		return None
-
-	ret = Point3D(A.x, A.y, 0)
-	ret.x = ret.x + (B.x-A.x)*s;
-	ret.y = ret.y + (B.y-A.y)*s;
-	return ret
-
 def PointsEqual(A, B):
 	return abs(A.x - B.x) < EPS and abs(A.y - B.y) < EPS and abs(A.z - B.z) < EPS
 
