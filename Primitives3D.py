@@ -504,12 +504,45 @@ def COSBetween(Vertex, P1, P2):
 	magProduct = math.sqrt(V1.squaredMag()*V2.squaredMag())
 	if (magProduct < EPS):
 		return 0
-	return dot / magProduct
+	return float(dot) / float(magProduct)
+
+#Find the intersection of two lines segments in a numerically stable
+#way by looking at them parametrically
+def intersectSegments2D(A, B, C, D, countEndpoints = True):
+	denomDet = (D.x-C.x)*(A.y-B.y) - (D.y-C.y)*(A.x-B.x)
+	if (denomDet == 0): #Segments are parallel
+		return None
+	num_t = (A.x-C.x)*(A.y-B.y) - (A.y-C.y)*(A.x-B.x);
+	num_s = (D.x-C.x)*(A.y-C.y) - (D.y-C.y)*(A.x-C.x);
+	t = float(num_t) / float(denomDet)
+	s = float(num_s) / float(denomDet)
+	if (s < 0 or s > 1):
+		return None #Intersection not within the bounds of segment 1
+	if (t < 0 or t > 1):
+		return None #Intersection not within the bounds of segment 2
+
+	#Don't count intersections that occur at the endpoints of both segments
+	#if the user so chooses
+	if ((t == 0 or t == 1) and (s == 0 or s == 1) and (not countEndpoints)):
+		return None
+
+	ret = Point3D(A.x, A.y, 0)
+	ret.x = ret.x + (B.x-A.x)*s;
+	ret.y = ret.y + (B.y-A.y)*s;
+	return ret
+
+def PointsEqual(A, B):
+	return abs(A.x - B.x) < EPS and abs(A.y - B.y) < EPS and abs(A.z - B.z) < EPS
 
 if __name__ == '__main__':
 	m = Matrix4([0, 1, 0, 0, 0, 0, 1, 2, 1, 0, 0, 0, 0, 0, 0, 1])
 	print m
 	print m.Inverse()
+	A = Point3D(-1, 0, 0)
+	B = Point3D(1, 0, 0)
+	C = Point3D(0, 1, 0)
+	D = Point3D(0, -1, 0)
+	print intersectSegments2D(A, B, C, D)
 
 if __name__ == '__main__2':
 #	P0 = Point3D(-2.5, 0, -2.5)
