@@ -6,7 +6,6 @@
 #are just degenerate cases (e.g. Point3D(x, y, 0) describes a 2D point)
 from Primitives3D import *
 
-
 #This helper function is used to print 2D polygons
 #as parallel lists of x and y coordinates
 #so that they can be used with the "patch" command
@@ -164,3 +163,49 @@ def clipSutherlandHodgman(boundaryPoly, toClipPoly):
 		if not PointsEqual2D(outputList[i], outputList[(i+1)%len(outputList)], EPS):
 			ret.append(outputList[i])
 	return ret
+
+
+
+#Helper function for "pointInsideTriangle()"
+def pointOnRightSideOfEdge2D(A, B, P, CLOSENESS_EPS = EPS):
+	CCWABP = CCW2D(A, B, P)
+	if CCWABP != 1 and CCWABP != 0:
+		if CCWABP == -1:
+			#Do a perpendicular projection onto the segment
+			#to make sure it isn't a super close call
+			vAB = B - A
+			vAP = P - A
+			proj = vAB.projPerp(vAP)
+			if proj.squaredMag() < CLOSENESS_EPS:
+				return True
+			return False
+		#Check endpoints
+		elif CCWABP == -2:
+			vPA = A - P
+			if vPA.squaredMag() < CLOSENESS_EPS:
+				return True
+			return False
+		elif CCWABP == 2:
+			vPB = B - P
+			if vPB.squaredMag() < CLOSENESS_EPS:
+				return True
+			return False
+		else:
+			print "ERROR in pointOnRightSideOfEdge2D: Shouldn't have gotten here"
+	return True
+
+#This is a helper function for "getCutsInsideTriangle()" in the Equidecomposability project
+#and also a helper function for ear cutting triangulation
+def pointInsideTriangle2D(A, B, C, P, CLOSENESS_EPS = EPS):
+	isInside = pointOnRightSideOfEdge2D(A, B, P, CLOSENESS_EPS)
+	isInside = isInside and (pointOnRightSideOfEdge2D(B, C, P, CLOSENESS_EPS))
+	isInside = isInside and (pointOnRightSideOfEdge2D(C, A, P, CLOSENESS_EPS))
+	return isInside
+
+if __name__ ==  '__main__':
+	A = Point3D(-1, 0, 0)
+	B = Point3D(0, 1, 0)
+	C = Point3D(1, 0, 0)
+	P = Point3D(0, 1, 0)
+	print pointInsideTriangle2D(A, B, C, P)
+	print a
