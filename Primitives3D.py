@@ -495,6 +495,9 @@ def getPolygonArea(verts):
 		area = area + 0.5*(v1%v2).Length()
 	return area
 
+def getTriangleArea(A, B, C):
+	return getPolygonArea([A, B, C])
+
 #Return the cosine of the angle between P1 and P2 with respect
 #to "Vertex" as their common, shared vertex
 def COSBetween(Vertex, P1, P2):

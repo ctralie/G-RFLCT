@@ -197,10 +197,21 @@ def pointOnRightSideOfEdge2D(A, B, P, CLOSENESS_EPS = EPS):
 #This is a helper function for "getCutsInsideTriangle()" in the Equidecomposability project
 #and also a helper function for ear cutting triangulation
 def pointInsideTriangle2D(A, B, C, P, CLOSENESS_EPS = EPS):
-	isInside = pointOnRightSideOfEdge2D(A, B, P, CLOSENESS_EPS)
-	isInside = isInside and (pointOnRightSideOfEdge2D(B, C, P, CLOSENESS_EPS))
-	isInside = isInside and (pointOnRightSideOfEdge2D(C, A, P, CLOSENESS_EPS))
+	[AP, BP, CP] = [A, B, C]
+	if CCW2D(A, B, C) == -1:
+		[AP, BP, CP] = [C, B, A]
+	isInside = pointOnRightSideOfEdge2D(AP, BP, P, CLOSENESS_EPS)
+	isInside = isInside and (pointOnRightSideOfEdge2D(BP, CP, P, CLOSENESS_EPS))
+	isInside = isInside and (pointOnRightSideOfEdge2D(CP, AP, P, CLOSENESS_EPS))
 	return isInside
+
+#This function assumes that "poly" is convex
+def pointInsideConvexPolygon2D(poly, P, CLOSENESS_EPS = EPS):
+	for i in range(1, len(poly)-1):
+		[A, B, C] = [poly[0], poly[i], poly[i+1]]
+		if not pointInsideTriangle2D(A, B, C, P, CLOSENESS_EPS):
+			return False
+	return True
 
 if __name__ ==  '__main__':
 	A = Point3D(-1, 0, 0)
