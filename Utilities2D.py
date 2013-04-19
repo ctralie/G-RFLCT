@@ -209,9 +209,9 @@ def pointInsideTriangle2D(A, B, C, P, CLOSENESS_EPS = EPS):
 def pointInsideConvexPolygon2D(poly, P, CLOSENESS_EPS = EPS):
 	for i in range(1, len(poly)-1):
 		[A, B, C] = [poly[0], poly[i], poly[i+1]]
-		if not pointInsideTriangle2D(A, B, C, P, CLOSENESS_EPS):
-			return False
-	return True
+		if pointInsideTriangle2D(A, B, C, P, CLOSENESS_EPS):
+			return True
+	return False
 
 if __name__ ==  '__main__':
 	A = Point3D(-1, 0, 0)
