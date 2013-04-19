@@ -512,6 +512,15 @@ def COSBetween(Vertex, P1, P2):
 def PointsEqual(A, B):
 	return abs(A.x - B.x) < EPS and abs(A.y - B.y) < EPS and abs(A.z - B.z) < EPS
 
+def printPointsList(L, name):
+	print "%s = ["%name,
+	for i in range(0, len(L)):
+		print "%s"%L[i],
+		if i < len(L) - 1:
+			print ",",
+		else:
+			print "]"
+
 if __name__ == '__main__':
 	m = Matrix4([0, 1, 0, 0, 0, 0, 1, 2, 1, 0, 0, 0, 0, 0, 0, 1])
 	print m

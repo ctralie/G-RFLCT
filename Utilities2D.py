@@ -98,11 +98,26 @@ def intersectSegments2D(A, B, C, D, countEndpoints = True):
 	ret.y = ret.y + (B.y-A.y)*s;
 	return ret
 
+def polyIsCCW(poly):
+	for i in range(0, len(poly)-2):
+		P0 = poly[i]
+		P1 = poly[i+1]
+		P2 = poly[(i+2)%len(poly)]
+		ccw = CCW2D(P0, P1, P2)
+		if ccw == 1:
+			return False
+	return True
+
 #Perform Sutherland Hodgman Clipping to clip the polygon "toClipPoly"
 #to the inside of the polygon "boundaryPoly"
 #Following pseudocode on http://en.wikipedia.org/wiki/Sutherland%E2%80%93Hodgman_algorithm
-def clipSutherlandHodgman(boundaryPoly, toClipPoly):
+def clipSutherlandHodgman(boundaryPolyParam, toClipPoly):
 	outputList = toClipPoly[:]
+	if not polyIsCCW(outputList):
+		outputList.reverse()
+	boundaryPoly = boundaryPolyParam[:]
+	if not polyIsCCW(boundaryPoly):
+		boundaryPoly.reverse()
 	for v in outputList:
 		v.clippedVertex = False
 	for i in range(0, len(boundaryPoly)):
@@ -214,9 +229,8 @@ def pointInsideConvexPolygon2D(poly, P, CLOSENESS_EPS = EPS):
 	return False
 
 if __name__ ==  '__main__':
-	A = Point3D(-1, 0, 0)
-	B = Point3D(0, 1, 0)
-	C = Point3D(1, 0, 0)
-	P = Point3D(0, 1, 0)
-	print pointInsideTriangle2D(A, B, C, P)
-	print a
+	Points1 = [ Point3D(151.747, 90.6552, 0) , Point3D(151.747, 50, 0) , Point3D(50, 50, 0) , Point3D(85.9002, 136.766, 0) , Point3D(116.439, 136.766, 0) ]
+	Points2 = [ Point3D(146.971, 99.2023, 0) , Point3D(146.971, 95.52, 0) , Point3D(50, 95.52, 0) , Point3D(50, 141.04, 0) , Point3D(116.439, 141.04, 0) ]
+	intPoints = clipSutherlandHodgman(Points1, Points2)
+	for P in intPoints:
+		print P
