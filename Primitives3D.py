@@ -213,6 +213,17 @@ class Matrix4(object):
 			else:
 				return Vector3D(retv[0], retv[1], retv[2])
 	
+	def __rmul__(self, a):
+		try:
+			mulVal = float(a)
+			otherm = [a*elem for elem in self.m]
+			return Matrix4(otherm)
+		except ValueError:
+			print "ERROR: Trying to multiply matrix on left by type %s"%type(a)
+	
+	def __neg__(self):
+		return -1*self
+	
 	#http://stackoverflow.com/questions/1148309/inverting-a-4x4-matrix
 	def Inverse(self):
 		m = self.m

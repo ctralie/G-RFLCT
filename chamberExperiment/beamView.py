@@ -26,13 +26,16 @@ class Viewer(object):
 	def initBeamTreeAtPos(self):
 		beamWidth = 50*math.pi/180
 		orig = self.beamOrigin
+		print orig - (Point3D(1.5, -1.5, -1.5) + Vector3D(-0.838, 0.914, 1.78))
 		self.scene.Source = orig
 		delt = math.tan(beamWidth/2.0)
 		#def rotateAroundAxis(P0, axis, theta, V)
 		beamVerts = [orig + Vector3D(-delt, -delt, -1), orig + Vector3D(delt, -delt, -1), orig + Vector3D(delt, delt, -1), orig + Vector3D(-delt, delt, -1)]
 		#Rotate the beam 45 degrees
 		for i in range(0, len(beamVerts)):
-			beamVerts[i] = rotateAroundAxis(orig, Vector3D(0, 1, 0), -math.pi/4, beamVerts[i])
+			beamVerts[i] = rotateAroundAxis(orig, Vector3D(0, 1, 0), -math.pi/8, beamVerts[i])
+		for i in range(0, len(beamVerts)):
+			beamVerts[i] = rotateAroundAxis(orig, Vector3D(1, 0, 0), -math.pi/8, beamVerts[i])
 		self.beamTree = BeamTree(self.scene.Source, self.meshFaces, 1, [beamVerts])
 
 	def recalculateBeams(self):
@@ -62,6 +65,7 @@ class Viewer(object):
 		self.GLUTButton = [0, 0, 0, 0, 0]
 		self.GLUTModifiers = 0
 		self.keys = {}
+		self.drawBeam = True
 		
 		#Camera and projection state variables
 		self.camera = MouseSphericalCamera(self.pixWidth, self.pixHeight)
@@ -75,7 +79,7 @@ class Viewer(object):
 		
 		self.sceneTransparent = True
 		self.beamTrans = 0.3 #Beam transparency
-		self.beamOrigin = Point3D(1.5, -1.5, -1.5) + Vector3D(-0.85, 0.95, 1.8288)
+		self.beamOrigin = Point3D(1.5, -1.5, -1.5) + Vector3D(-0.838, 0.914, 1.78)
 		self.initBeamTreeAtPos()
 		self.drawRightBeams = False
 		self.drawBottomBeams = False
