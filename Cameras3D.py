@@ -114,14 +114,21 @@ class MousePolarCamera(object):
 		self.theta = 0 
 		self.phi = 0 
 		self.updateVecsFromPolar()
-
-	def centerOnMesh(self, mesh):
-		bbox = mesh.getBBox()
+	
+	def centerOnBBox(self, bbox):
 		self.center = bbox.getCenter()
 		self.R = bbox.getDiagLength()*3
 		self.theta = -math.pi/2
 		self.phi = math.pi/2
-		self.updateVecsFromPolar()
+		self.updateVecsFromPolar()		
+
+	def centerOnMesh(self, mesh):
+		bbox = mesh.getBBox()
+		self.centerOnBBox(bbox)
+	
+	def centerOnPointCloud(self, pcl):
+		bbox = pcl.getBBox()
+		self.centerOnBBox(bbox)
 
 	def updateVecsFromPolar(self):
 		[sinT, cosT, sinP, cosP] = [math.sin(self.theta), math.cos(self.theta), math.sin(self.phi), math.cos(self.phi)]
@@ -183,12 +190,19 @@ class MouseSphericalCamera(object):
 		self.towards = Vector3D(0, 0, -1)
 		self.up = Vector3D(0, 1, 0)
 
-	def centerOnMesh(self, mesh):
-		bbox = mesh.getBBox()
+	def centerOnBBox(self, bbox):
 		self.center = bbox.getCenter()
 		self.towards = Vector3D(0, 0, -1)
 		self.up = Vector3D(0, 1, 0)
 		self.eye = self.center - (bbox.getDiagLength()*3)*self.towards
+
+	def centerOnMesh(self, mesh):
+		bbox = mesh.getBBox()
+		self.centerOnBBox(bbox)
+	
+	def centerOnPointCloud(self, pcl):
+		bbox = pcl.getBBox()
+		self.centerOnBBox(bbox)
 
 	def gotoCameraFrame(self):
 		gotoCameraFrame(self.towards, self.up, self.towards%self.up, self.eye)

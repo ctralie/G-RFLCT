@@ -59,7 +59,7 @@ class Viewer(object):
 		self.sceneTransparent = True
 		self.toggleDrawSplits = False
 		self.beamTrans = 0.3 #Beam transparency
-		self.beamTree = BeamTree(self.scene.Source, self.meshFaces, 1)
+		self.beamTree = BeamTree(self.scene.Source, self.meshFaces, 2)
 		
 		self.initGL()
 
@@ -125,7 +125,9 @@ class Viewer(object):
 					for child in beam.children:
 						if DRAW_BACKPROJECTED:
 							child.drawBackProjected(self.meshFaces)
-						child.drawBeam((1, 1, 0))
+						child.drawBeam()
+						for child2 in child.children:
+							child2.drawBeam()
 			
 			#Next draw the 2D projection scene on the right
 			dim = self.pixWidth - 800

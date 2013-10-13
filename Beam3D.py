@@ -193,7 +193,7 @@ class Beam3D(object):
 	#backProjectedFaces is a by-reference array for storing the clipped faces back
 	#in world coordinates
 	#Side effects: adds the field "visibleFaces" to the beam
-	def findLargestUnobstructedFace(self, faces, backProjectedFaces = []):
+	def findLargestUnobstructedFace(self, faces, backProjectedFaces = None):
 		validFaces = []
 		#First find the faces that are actually within the beam
 		for face in faces:
@@ -215,7 +215,8 @@ class Beam3D(object):
 			#Put the clipped coordinates of this face back into world
 			#coordinates
 			vertices = self.projectBackClippedFace(face[0], face[1])
-			backProjectedFaces.append(vertices)
+			if backProjectedFaces:
+				backProjectedFaces.append(vertices)
 			#Check "face" against the plane of every other valid face
 			faceInFront = True
 			for j in range(0, len(validFaces)):
