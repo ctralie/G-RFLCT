@@ -2,6 +2,7 @@ from Primitives3D import *
 from Shapes3D import *
 from OpenGL.GL import *
 from Graphics3D import *
+import numpy as np
 
 class PointCloud(object):
 	def __init__(self):
@@ -31,6 +32,30 @@ class PointCloud(object):
 			self.loadXYZFile(filename)
 		else:
 			print "ERROR: Unrecognized file extension %s"%(suffix)
+		self.needsDisplayUpdate = True
+	
+	#Initialize from parallel xyz and rgb numpy matrices
+	def initFromXYZRGB(self, xyz, rgb):
+		print "Loading point cloud..."
+		N = rgb.shape[0]*rgb.shape[1]
+		if N != xyz.shape[0]*xyz.shape[1]:
+			print "ERROR: Cannot initialize point cloud.  xyz shape = %s, but rgb shape = %s"%(xyz, rgb)
+			return
+		rgb = rgb.astype(np.float32)
+		rgb = rgb/256.0
+		R = rgb[:, :, 0].flatten()
+		G = rgb[:, :, 1].flatten()
+		B = rgb[:, :, 2].flatten()
+		X = xyz[:, :, 0].flatten()
+		Y = xyz[:, :, 1].flatten()
+		Z = xyz[:, :, 2].flatten()
+		for i in range(N):
+			if np.isnan(X[i]):
+				continue
+			self.colors.append([R[i], G[i], B[i]])
+			self.points.append(Point3D(X[i], Y[i], Z[i]))
+		print "Finished loading point cloud of %i points"%len(self.points)
+		self.needsDisplayUpdate = True
 	
 	def renderGL(self):
 		if self.needsDisplayUpdate:
@@ -52,7 +77,7 @@ class PointCloud(object):
 
 	def getBBox(self):
 		if len(self.points) == 0:
-			return BBox3D(0, 0, 0, 0, 0, 0)
+			return BBox3D()#Return a bbox of unit length
 		P0 = self.points[0]
 		bbox = BBox3D(P0.x, P0.x, P0.y, P0.y, P0.z, P0.z)
 		for P in self.points:
