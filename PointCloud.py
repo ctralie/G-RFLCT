@@ -38,21 +38,34 @@ class PointCloud(object):
 				glDeleteLists(self.DisplayList, 1)
 			self.DisplayList = glGenLists(1)
 			glNewList(self.DisplayList, GL_COMPILE)
+			glDisable(GL_LIGHTING)
 			glPointSize(5)
 			glBegin(GL_POINTS)
 			for P, C in zip(self.points, self.colors):
 				glColor3f(C[0], C[1], C[2])
 				glVertex3f(P.x, P.y, P.z)
 			glEnd()
+			glEnable(GL_LIGHTING)
 			glEndList()
 			self.needsDisplayUpdate = False
 		glCallList(self.DisplayList)
 
 	def getBBox(self):
-		if len(self.vertices) == 0:
+		if len(self.points) == 0:
 			return BBox3D(0, 0, 0, 0, 0, 0)
 		P0 = self.points[0]
 		bbox = BBox3D(P0.x, P0.x, P0.y, P0.y, P0.z, P0.z)
 		for P in self.points:
 			bbox.addPoint(P)
 		return bbox
+
+def getPointColorCube(NPoints = 20):
+	ret = PointCloud()
+	dim = int(round(NPoints/2))
+	for x in range(-dim, dim):
+		for y in range(-dim, dim):
+			for z in range(-dim, dim):
+				[X, Y, Z] = [float(x)/NPoints, float(y)/NPoints, float(z)/NPoints]
+				ret.points.append(Point3D(X, Y, Z))
+				ret.colors.append([float(x+dim)/NPoints, float(y+dim)/NPoints, float(z+dim)/NPoints])
+	return ret
