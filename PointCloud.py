@@ -53,7 +53,7 @@ class PointCloud(object):
 			if np.isnan(X[i]):
 				continue
 			self.colors.append([R[i], G[i], B[i]])
-			self.points.append(Point3D(X[i], Y[i], Z[i]))
+			self.points.append(Point3D(-X[i], Y[i], -Z[i]))
 		print "Finished loading point cloud of %i points"%len(self.points)
 		self.needsDisplayUpdate = True
 	
@@ -77,7 +77,7 @@ class PointCloud(object):
 
 	def getBBox(self):
 		if len(self.points) == 0:
-			return BBox3D()#Return a bbox of unit length
+			return BBox3D(0, 0, 0, 0, 0, 0)
 		P0 = self.points[0]
 		bbox = BBox3D(P0.x, P0.x, P0.y, P0.y, P0.z, P0.z)
 		for P in self.points:

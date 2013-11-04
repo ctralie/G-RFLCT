@@ -111,15 +111,15 @@ class MousePolarCamera(object):
 		self.yfov = yfov
 		self.center = Point3D(0, 0, 0)
 		self.R = 1
-		self.theta = 0 
+		self.theta = 0
 		self.phi = 0 
 		self.updateVecsFromPolar()
 	
-	def centerOnBBox(self, bbox):
+	def centerOnBBox(self, bbox, theta = -math.pi/2, phi = math.pi/2):
 		self.center = bbox.getCenter()
 		self.R = bbox.getDiagLength()*3
-		self.theta = -math.pi/2
-		self.phi = math.pi/2
+		self.theta = theta
+		self.phi = phi
 		self.updateVecsFromPolar()		
 
 	def centerOnMesh(self, mesh):
