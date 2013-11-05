@@ -53,7 +53,7 @@ class PointCloud(object):
 			if np.isnan(X[i]):
 				continue
 			self.colors.append([R[i], G[i], B[i]])
-			self.points.append(Point3D(-X[i], Y[i], -Z[i]))
+			self.points.append(Point3D(X[i], Y[i], Z[i]))
 		print "Finished loading point cloud of %i points"%len(self.points)
 		self.needsDisplayUpdate = True
 	
