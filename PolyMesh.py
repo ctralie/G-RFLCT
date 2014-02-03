@@ -4,6 +4,7 @@ from OpenGL.GL import *
 from Graphics3D import *
 import sys
 import re
+import numpy as np
 
 class MeshVertex(object):
 	def __init__(self, P, ID):
@@ -219,12 +220,14 @@ class PolyMesh(object):
 	def __init__(self):
 		self.DisplayList = -1
 		self.needsDisplayUpdate = True
+		self.drawFaces = 1
 		self.drawEdges = 0
 		self.drawVerts = 0
 		self.drawNormals = 0
 		self.vertices = []
 		self.edges = []
 		self.faces = []
+		self.vertexColors = np.zeros(0)
 		#Pointers to a representative vertex in different 
 		#connected components
 		self.components = []
@@ -843,7 +846,11 @@ class PolyMesh(object):
 		if verbose:
 			print "Saved file to %s"%filename
 	
-	def renderGL(self, drawEdges = 0, drawVerts = 0, drawNormals = 0, extraVerts = None):
+	#vertexColors is an Nx3 numpy array, where N is the number of vertices
+	def renderGL(self, drawEdges = 0, drawVerts = 0, drawNormals = 0, drawFaces = 1, extraVerts = None, vertexColors = np.zeros(0) ):
+		if self.drawFaces != drawFaces:
+			self.drawFaces = drawFaces
+			self.needsDisplayUpdate = True
 		if self.drawEdges != drawEdges:
 			self.drawEdges = drawEdges
 			self.needsDisplayUpdate = True
@@ -853,13 +860,22 @@ class PolyMesh(object):
 		if self.drawNormals != drawNormals:
 			self.drawNormals = drawNormals
 			self.needsDisplayUpdate = True
+		if self.vertexColors.shape[0] == 0 and vertexColors.shape[0] > 0:
+			self.vertexColors = vertexColors
+			self.needsDisplayUpdate = True
+		if vertexColors.shape[0] > 0 and self.vertexColors.shape[0] > 0:
+			if not (self.vertexColors.ctypes.data == vertexColors.ctypes.data):
+				self.vertexColors = vertexColors
+				self.needsDisplayUpdate = True
+		
 		if self.needsDisplayUpdate:
 			if self.DisplayList != -1: #Deallocate previous display list
 				glDeleteLists(self.DisplayList, 1)
 			self.DisplayList = glGenLists(1)
 			glNewList(self.DisplayList, GL_COMPILE)
-			for f in self.faces:
-				f.drawFilled()
+			if self.drawFaces:
+				for f in self.faces:
+					f.drawFilled()
 			if self.drawEdges:
 				glDisable(GL_LIGHTING)
 				glColor3f(0, 0, 1)
@@ -876,8 +892,14 @@ class PolyMesh(object):
 				glColor3f(1, 0, 0)
 				glPointSize(5)
 				glBegin(GL_POINTS)
-				for v in self.vertices:
-					P = v.pos
+				for i in range(0, len(self.vertices)):
+					P = self.vertices[i].pos
+					if self.vertexColors:
+						if len(self.vertexColors) > i:
+							R = self.vertexColors[i, 0]
+							G = self.vertexColors[i, 1]
+							B = self.vertexColors[i, 2]
+							glColor3f(R, G, B)
 					glVertex3f(P.x, P.y, P.z)
 				glEnd()
 			if self.drawNormals:

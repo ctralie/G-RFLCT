@@ -2,6 +2,7 @@
 	<EMMaterials>
 		<material name = "reflective" R = "1.0" T = "0.0"/>
 		<material name = "absorptive" R = "0.0" T = "0.0"/>
+		<material name = "transparent" R = "0.0" T = "1.0"/>
 	</EMMaterials>
 	<OpticalMaterials>
 		<material name = "bluish" 
@@ -17,11 +18,11 @@
 			kt = "0 0 0 "
 			emission = "0 0 0 "/>
 	</OpticalMaterials>
-	<Source pos = "0 0 -2"/>
+	<Source pos = "0 0.5 -2"/>
 	<Receiver pos = "0 0 2"/>
-	<box length = "5" width = "5" height = "2.5" center = "0 0 0">
-		1 1 0 0
+	<box length = "6" width = "4" height = "4" center = "0 0 0">
 		1 0 0 0
+		0 1 0 0
 		0 0 1 0
 		0 0 0 1
 	</box>
