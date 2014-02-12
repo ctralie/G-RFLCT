@@ -39,7 +39,7 @@ class BBox3D(object):
 		self.zmax = max(self.zmax, otherBBox.zmax)
 	
 	def __str__(self):
-		return "xmin = %g, xmax = %g, ymin = %g, ymax = %g, zmin = %g, zmax = %g"%(self.xmin, self.xmax, self.ymin, self.ymax, self.zmin, self.zmax)
+		return "BBox3D: [%g, %g] x [%g, %g] x [%g, %g],  Range (%g x %g x %g)"%(self.xmin, self.xmax, self.ymin, self.ymax, self.zmin, self.zmax, self.xmax - self.xmin, self.ymax - self.ymin, self.zmax - self.zmin)
 
 class Circle3D(object):
 	#center is a point
