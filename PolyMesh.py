@@ -125,8 +125,14 @@ class MeshFace(object):
 			if isinstance(normal, Vector3D):
 				glNormal3f(normal.x, normal.y, normal.z)
 		verts = self.getVertices()
+		if len(verts) > 0:
+			if verts[0].color:
+				#There's color information so don't shade based on normal
+				glDisable(GL_LIGHTING)
 		for v in verts:
 			P = v.pos
+			if v.color:
+				glColor3f(v.color[0], v.color[1], v.color[2])
 			glVertex3f(P.x, P.y, P.z)
 		glEnd()
 	
@@ -227,7 +233,6 @@ class PolyMesh(object):
 		self.vertices = []
 		self.edges = []
 		self.faces = []
-		self.vertexColors = np.zeros(0)
 		#Pointers to a representative vertex in different 
 		#connected components
 		self.components = []
@@ -247,8 +252,9 @@ class PolyMesh(object):
 	####                ADD/REMOVE METHODS                  #####
 	#############################################################
 
-	def addVertex(self, P):
+	def addVertex(self, P, color = None):
 		vertex = MeshVertex(P, len(self.vertices))
+		vertex.color = color
 		self.vertices.append(vertex)
 		return vertex
 	
@@ -761,7 +767,11 @@ class PolyMesh(object):
 			elif vertex < nVertices:
 				fields = [float(i) for i in fields]
 				P = Point3D(fields[0], fields[1], fields[2])
-				self.addVertex(P)
+				color = None
+				if len(fields) >= 6:
+					#There is color information
+					color = [float(c) for c in fields[3:6]]
+				self.addVertex(P, color)
 				vertex = vertex+1
 			elif face < nFaces:
 				#Assume the vertices are specified in CCW order
@@ -847,7 +857,7 @@ class PolyMesh(object):
 			print "Saved file to %s"%filename
 	
 	#vertexColors is an Nx3 numpy array, where N is the number of vertices
-	def renderGL(self, drawEdges = 0, drawVerts = 0, drawNormals = 0, drawFaces = 1, extraVerts = None, vertexColors = np.zeros(0) ):
+	def renderGL(self, drawEdges = 0, drawVerts = 0, drawNormals = 0, drawFaces = 1, extraVerts = None ):
 		if self.drawFaces != drawFaces:
 			self.drawFaces = drawFaces
 			self.needsDisplayUpdate = True
@@ -860,13 +870,6 @@ class PolyMesh(object):
 		if self.drawNormals != drawNormals:
 			self.drawNormals = drawNormals
 			self.needsDisplayUpdate = True
-		if self.vertexColors.shape[0] == 0 and vertexColors.shape[0] > 0:
-			self.vertexColors = vertexColors
-			self.needsDisplayUpdate = True
-		if vertexColors.shape[0] > 0 and self.vertexColors.shape[0] > 0:
-			if not (self.vertexColors.ctypes.data == vertexColors.ctypes.data):
-				self.vertexColors = vertexColors
-				self.needsDisplayUpdate = True
 		
 		if self.needsDisplayUpdate:
 			if self.DisplayList != -1: #Deallocate previous display list
@@ -894,12 +897,9 @@ class PolyMesh(object):
 				glBegin(GL_POINTS)
 				for i in range(0, len(self.vertices)):
 					P = self.vertices[i].pos
-					if self.vertexColors:
-						if len(self.vertexColors) > i:
-							R = self.vertexColors[i, 0]
-							G = self.vertexColors[i, 1]
-							B = self.vertexColors[i, 2]
-							glColor3f(R, G, B)
+					color = self.vertices[i].color
+					if color:
+						glColor3f(color[0], color[1], color[2])
 					glVertex3f(P.x, P.y, P.z)
 				glEnd()
 			if self.drawNormals:
