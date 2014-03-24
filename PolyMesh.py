@@ -13,6 +13,7 @@ class MeshVertex(object):
 		self.edges = set() #Store reference to all emanating edges
 		#NOTE: Edges are not guaranteed to be in any particular order
 		self.component = -1 #Which connected component it's in
+		self.color = None
 	
 	def getVertexNeighbors(self):
 		ret = [0]*len(self.edges)
@@ -664,9 +665,12 @@ class PolyMesh(object):
 				if distV1 < 0 and distV2 >= 0:
 					if not e.centerVertex:
 						line = Line3D(v1.pos, v2.pos - v1.pos)
-						P = line.intersectPlane(plane)[1]
+						[t, P] = line.intersectPlane(plane)
 						if P:
-							e.centerVertex = self.addVertex(P)
+							newColor = None
+							if v1.color and v2.color:
+								newColor = [(1-t)*v1.color[a] + t*v2.color[a] for a in range(0, 3)]
+							e.centerVertex = self.addVertex(P, newColor)
 							e.centerVertex.borderVertex = True
 							borderVertex = e.centerVertex
 					if e.centerVertex:
@@ -677,9 +681,12 @@ class PolyMesh(object):
 				if distV1 >= 0 and distV2 <= 0:
 					if not e.centerVertex:
 						line = Line3D(v1.pos, v2.pos - v1.pos)
-						P = line.intersectPlane(plane)[1]
+						[t, P] = line.intersectPlane(plane)
 						if P:
-							e.centerVertex = self.addVertex(P)
+							newColor = None
+							if v1.color and v2.color:
+								newColor = [(1-t)*v1.color[a] + t*v2.color[a] for a in range(0, 3)]
+							e.centerVertex = self.addVertex(P, newColor)
 							e.centerVertex.borderVertex = True
 							borderVertex = e.centerVertex
 					if e.centerVertex:
