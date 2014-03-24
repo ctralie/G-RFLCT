@@ -781,9 +781,16 @@ class PolyMesh(object):
 				self.addFace(verts)
 				face = face+1
 		fin.close()
+		for v in self.vertices:
+			if v.color:
+				if v.color[0] > 1:
+					#Rescale colors
+					for v2 in self.vertices:
+						v2.color = [a/255.0 for a in v2.color]
+					break
 			
 	
-	def saveOffFile(self, filename, verbose = False):
+	def saveOffFile(self, filename, verbose = False, outputColors = True):
 		nV = len(self.vertices)
 		nE = len(self.edges)
 		nF = len(self.faces)
@@ -793,7 +800,10 @@ class PolyMesh(object):
 		fout.write("OFF\n%i %i %i\n"%(nV, nF, 0))
 		for v in self.vertices:
 			P = v.pos
-			fout.write("%g %g %g\n"%(P.x, P.y, P.z))
+			fout.write("%g %g %g"%(P.x, P.y, P.z))
+			if outputColors and v.color:
+				fout.write(" %g %g %g"%tuple(v.color))
+			fout.write("\n")
 		for f in self.faces:
 			verts = f.getVertices()
 			fout.write("%i "%(len(verts)))
@@ -847,6 +857,7 @@ class PolyMesh(object):
 			print "Saved file to %s"%filename
 	
 	def saveSTLFile(self, filename, verbose = False):
+		print "TODO: Finish STL Saving File Function"
 		fout = open(filename, "w")
 		fout.write("#Generated with Chris Tralie's G-RFLCT Library\n")
 		fout.write("#http://www.github.com/ctralie/G-RFLCT\n")
