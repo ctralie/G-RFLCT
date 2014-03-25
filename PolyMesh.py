@@ -121,15 +121,11 @@ class MeshFace(object):
 	
 	def drawFilled(self, drawNormal = True):
 		glBegin(GL_POLYGON)
+		verts = self.getVertices()
 		if drawNormal:
 			normal = self.getNormal()
 			if isinstance(normal, Vector3D):
 				glNormal3f(normal.x, normal.y, normal.z)
-		verts = self.getVertices()
-		if len(verts) > 0:
-			if verts[0].color:
-				#There's color information so don't shade based on normal
-				glDisable(GL_LIGHTING)
 		for v in verts:
 			P = v.pos
 			if v.color:
@@ -744,6 +740,8 @@ class PolyMesh(object):
 			self.saveOffFile(filename, verbose)
 		elif suffix == "obj":
 			self.saveObjFile(filename, verbose)
+		elif suffix == "ply":
+			self.savePlyFile(filename, verbose)
 		else:
 			print "Unsupported file suffix (%s) for saving mesh %s"%(suffix, filename)		
 	
@@ -797,7 +795,7 @@ class PolyMesh(object):
 					break
 			
 	
-	def saveOffFile(self, filename, verbose = False, outputColors = True):
+	def saveOffFile(self, filename, verbose = False, outputColors = True, output255 = False):
 		nV = len(self.vertices)
 		nE = len(self.edges)
 		nF = len(self.faces)
@@ -809,7 +807,40 @@ class PolyMesh(object):
 			P = v.pos
 			fout.write("%g %g %g"%(P.x, P.y, P.z))
 			if outputColors and v.color:
-				fout.write(" %g %g %g"%tuple(v.color))
+				if output255:
+					fout.write(" %i %i %i"%tuple([int(round(255.0*c)) for c in v.color]))
+				else:
+					fout.write(" %g %g %g"%tuple(v.color))
+			fout.write("\n")
+		for f in self.faces:
+			verts = f.getVertices()
+			fout.write("%i "%(len(verts)))
+			for v in verts:
+				fout.write("%i "%(v.ID))
+			fout.write("\n")
+		fout.close()
+		if verbose:
+			print "Saved file to %s"%filename
+
+	def savePlyFile(self, filename, verbose = False, outputColors = True, output255 = True):
+		nV = len(self.vertices)
+		nE = len(self.edges)
+		nF = len(self.faces)
+		fout = open(filename, "w")
+		fout.write("ply\nformat ascii 1.0\nelement vertex %i\n"%nV)
+		fout.write("property float x\nproperty float y\nproperty float z\n")
+		if outputColors:
+			fout.write("property uchar red\nproperty uchar green\nproperty uchar blue\n")
+		fout.write("element face %i\n"%nF)
+		fout.write("property list uchar int vertex_indices\nend_header\n")
+		for v in self.vertices:
+			P = v.pos
+			fout.write("%g %g %g"%(P.x, P.y, P.z))
+			if outputColors and v.color:
+				if output255:
+					fout.write(" %i %i %i"%tuple([int(round(255.0*c)) for c in v.color]))
+				else:
+					fout.write(" %g %g %g"%tuple(v.color))
 			fout.write("\n")
 		for f in self.faces:
 			verts = f.getVertices()
@@ -895,6 +926,10 @@ class PolyMesh(object):
 			self.DisplayList = glGenLists(1)
 			glNewList(self.DisplayList, GL_COMPILE)
 			if self.drawFaces:
+				#If the faces have color information, don't light them
+				if len(self.vertices) > 0:
+					if self.vertices[0].color:
+						glDisable(GL_LIGHTING)
 				for f in self.faces:
 					f.drawFilled()
 			if self.drawEdges:
