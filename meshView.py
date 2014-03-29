@@ -6,6 +6,7 @@ from wx import glcanvas
 
 from Primitives3D import *
 from PolyMesh import *
+from LaplacianMesh import *
 from Geodesics import *
 from PointCloud import *
 from Cameras3D import *
@@ -67,7 +68,7 @@ class MeshViewerCanvas(glcanvas.GLCanvas):
 		random.seed()
 		
 		#Face mesh variables and manipulation variables
-		self.faceMesh = None
+		self.mesh = None
 		self.displayMeshFaces = True
 		self.displayMeshEdges = False
 		self.displayMeshVertices = False
@@ -125,15 +126,15 @@ class MeshViewerCanvas(glcanvas.GLCanvas):
 	
 	def CutWithPlane(self, evt):
 		if self.cutPlane:
-			self.faceMesh.sliceBelowPlane(self.cutPlane, False)
-			self.faceMesh.starTriangulate() #TODO: This is a patch to deal with "non-planar faces" added
+			self.mesh.sliceBelowPlane(self.cutPlane, False)
+			self.mesh.starTriangulate() #TODO: This is a patch to deal with "non-planar faces" added
 			self.Refresh()
 	
 	def ComputeGeodesicDistances(self, evt):
-		if not self.faceMesh:
+		if not self.mesh:
 			print "ERROR: Haven't loaded mesh yet"
 			return
-		D = getGeodesicDistancesFMM(self.faceMesh)
+		D = getGeodesicDistancesFMM(self.mesh)
 		D = D[0, :]
 		minD = min(D)
 		maxD = max(D)
@@ -144,6 +145,22 @@ class MeshViewerCanvas(glcanvas.GLCanvas):
 		self.vertexColors = np.zeros((N, 3))
 		for i in range(0, N):
 			self.vertexColors[i, :] = cmConvert((D[i] - minD)/(maxD - minD))[0:3]
+		self.Refresh()
+	
+	def InterpolateRandomColors(self, evt):
+		#constraints: [[(i1, w1), (i2, w2), ..., (in, wn)], ...], M constraints
+		#deltaCoords: NxY numpy array, where Y is the dimension
+		#g: MxY numpy array representing values of the constraints, where Y is the dimension
+		#and M is the number of constraints
+		N = len(self.mesh.vertices)
+		constraints = [ [(0, 1)], [(N-1, 1)] ]
+		deltaCoords = np.zeros((N, 3))
+		#Make the first vertex blue and the last vertex red
+		g = np.array([ [1.0, 0.0, 0.0], [0.0, 0.0, 1.0]])
+		colors = self.mesh.solveFunctionWithConstraints(constraints, deltaCoords, g)
+		for i in range(0, N):
+			self.mesh.vertices[i].color = [a for a in colors[i]]
+		self.mesh.needsDisplayUpdate = True
 		self.Refresh()
 	
 	def processEraseBackgroundEvent(self, event): pass #avoid flashing on MSW.
@@ -190,8 +207,8 @@ class MeshViewerCanvas(glcanvas.GLCanvas):
 		glMaterialfv(GL_FRONT_AND_BACK, GL_SPECULAR, [0.2, 0.2, 0.2, 1.0])
 		glMaterialfv(GL_FRONT_AND_BACK, GL_SHININESS, 64)
 		
-		if self.faceMesh:
-			self.faceMesh.renderGL(self.displayMeshEdges, self.displayMeshVertices, self.displayMeshNormals, self.displayMeshFaces, None)
+		if self.mesh:
+			self.mesh.renderGL(self.displayMeshEdges, self.displayMeshVertices, self.displayMeshNormals, self.displayMeshFaces, None)
 		
 		if self.displayCutPlane:
 			t = farDist*self.camera.towards
@@ -266,10 +283,10 @@ class MeshViewerFrame(wx.Frame):
 		print "MeshViewerFrameSize = %s, pos = %s"%(self.size, self.pos)
 		
 		filemenu = wx.Menu()
-		menuOpenFace = filemenu.Append(MeshViewerFrame.ID_LOADDATASET, "&Load Face","Load a triangular mesh representing a face")
-		self.Bind(wx.EVT_MENU, self.OnLoadMesh, menuOpenFace)
-		menuSaveFace = filemenu.Append(MeshViewerFrame.ID_SAVEDATASET, "&Save Face", "Save the edited triangular mesh")
-		self.Bind(wx.EVT_MENU, self.OnSaveFace, menuSaveFace)
+		menuOpenMesh = filemenu.Append(MeshViewerFrame.ID_LOADDATASET, "&Load Mesh","Load a polygon mesh")
+		self.Bind(wx.EVT_MENU, self.OnLoadMesh, menuOpenMesh)
+		menuSaveMesh = filemenu.Append(MeshViewerFrame.ID_SAVEDATASET, "&Save Mesh", "Save the edited polygon mesh")
+		self.Bind(wx.EVT_MENU, self.OnSaveFace, menuSaveMesh)
 		menuExit = filemenu.Append(wx.ID_EXIT,"E&xit"," Terminate the program")
 		self.Bind(wx.EVT_MENU, self.OnExit, menuExit)
 		
@@ -324,6 +341,12 @@ class MeshViewerFrame(wx.Frame):
 		ComputeGeodesicButton = wx.Button(self, -1, "Compute Geodesic Distances")
 		self.Bind(wx.EVT_BUTTON, self.glcanvas.ComputeGeodesicDistances, ComputeGeodesicButton)
 		self.rightPanel.Add(ComputeGeodesicButton)
+		
+		#Buttons for interpolating colors
+		self.rightPanel.Add(wx.StaticText(self, label="Colors"), 0, wx.EXPAND)
+		InterpolateRandomColorsButton = wx.Button(self, -1, "Interpolate Random Colors")
+		self.Bind(wx.EVT_BUTTON, self.glcanvas.InterpolateRandomColors, InterpolateRandomColorsButton)
+		self.rightPanel.Add(InterpolateRandomColorsButton)
 
 		#Finally add the two main panels to the sizer		
 		self.sizer = wx.BoxSizer(wx.HORIZONTAL)
@@ -345,14 +368,14 @@ class MeshViewerFrame(wx.Frame):
 			dirname = dlg.GetDirectory()
 			filepath = os.path.join(dirname, filename)
 			print dirname
-			self.glcanvas.faceMesh = PolyMesh()
+			self.glcanvas.mesh = LaplacianMesh()
 			print "Loading mesh %s..."%filename
-			self.glcanvas.faceMesh.loadFile(filepath)
-			print "Finished loading mesh\n %s"%self.glcanvas.faceMesh
+			self.glcanvas.mesh.loadFile(filepath)
+			print "Finished loading mesh\n %s"%self.glcanvas.mesh
 			#print "Deleting all but largest connected component..."
-			#self.glcanvas.faceMesh.deleteAllButLargestConnectedComponent()
-			print self.glcanvas.faceMesh
-			self.glcanvas.bbox = self.glcanvas.faceMesh.getBBox()
+			#self.glcanvas.mesh.deleteAllButLargestConnectedComponent()
+			print self.glcanvas.mesh
+			self.glcanvas.bbox = self.glcanvas.mesh.getBBox()
 			print "Mesh BBox: %s\n"%self.glcanvas.bbox
 			self.glcanvas.camera.centerOnBBox(self.glcanvas.bbox, theta = -math.pi/2, phi = math.pi/2)
 			self.glcanvas.Refresh()
@@ -365,7 +388,7 @@ class MeshViewerFrame(wx.Frame):
 			filename = dlg.GetFilename()
 			dirname = dlg.GetDirectory()
 			filepath = os.path.join(dirname, filename)
-			self.glcanvas.faceMesh.saveFile(filepath, True)
+			self.glcanvas.mesh.saveFile(filepath, True)
 			self.glcanvas.Refresh()
 		dlg.Destroy()
 		return

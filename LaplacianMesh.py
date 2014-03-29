@@ -19,7 +19,7 @@ def getCotangent(v1, v2, v3):
 	P3 = v3.pos
 	dV1 = P1 - P3
 	dV2 = P2 - P3
-	cosAngle = dV1.Dot(dV2)
+	cosAngle = dV1.Dot(dV2)/(dV1.Length()*dV2.Length())
 	sinAngle = math.sqrt(1 - cosAngle**2)
 	return cosAngle/sinAngle
 
@@ -67,9 +67,10 @@ class LaplacianMesh(PolyMesh):
 				
 
 	#Inputs:
-	#constraints: [[(i1, w1), (i2, w2), ..., (in, wn)], ...], N entries
-	#deltaCoords: NxY numpy array, where Y is the dimension 
-	#g: NxY numpy array representing values of the constraints, where Y is the dimension
+	#constraints: [[(i1, w1), (i2, w2), ..., (in, wn)], ...], M constraints
+	#deltaCoords: NxY numpy array, where Y is the dimension
+	#g: MxY numpy array representing values of the constraints, where Y is the dimension
+	#and M is the number of constraints
 	def solveFunctionWithConstraints(self, constraints, deltaCoords, g):
 		(I, J, V) = self.getLaplacianSparseMatrixCoords()
 		NVerts = len(self.vertices)
@@ -90,8 +91,11 @@ class LaplacianMesh(PolyMesh):
 		V = np.array(V)
 		#print "V.shape = %s, N = %i, M = %i"%(V.shape, N, M)
 		A = sparse.coo_matrix((V, (I, J)), shape=(N,M)).tocsr()
-		print A
-		return lsqr(A, b)[0]
+		ret = np.zeros((NVerts, Y))
+		for i in range(Y):
+			thisColumn = lsqr(A, b[:, i])[0]
+			ret[:, i] = thisColumn
+		return ret
 	
 	#Make a call to solveFunctionWithConstraints and update positions
 	#constraints are in the form [(index, Position), ...]
