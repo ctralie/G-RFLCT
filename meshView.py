@@ -1,61 +1,181 @@
+#Based off of http://wiki.wxpython.org/GLCanvas
+#Lots of help from http://wiki.wxpython.org/Getting%20Started
 from OpenGL.GL import *
-from OpenGL.GLU import *
-from OpenGL.GLUT import *
+import wx
+from wx import glcanvas
+
 from Primitives3D import *
 from PolyMesh import *
+from Geodesics import *
+from PointCloud import *
 from Cameras3D import *
-from sys import argv
+from sys import exit, argv
 import random
+import numpy as np
+import scipy.io as sio
+from pylab import cm
+import os
+import math
+import time
 
-class Viewer(object):
-	def __init__(self, infilename, outfilename = "out.obj"):
-		#GLUT State variables
-		self.GLUTwindow_height = 800
-		self.GLUTwindow_width = 800
-		self.GLUTmouse = [0, 0]
-		self.GLUTButton = [0, 0, 0, 0, 0]
-		self.GLUTModifiers = 0
-		self.keys = {}
-		self.drawEdges = 0
-		self.drawVerts = 0
-		self.drawNormals = 0
-		self.drawCutPlane = 0
+DEFAULT_SIZE = wx.Size(1200, 800)
+DEFAULT_POS = wx.Point(10, 10)
+
+def saveImageGL(mvcanvas, filename):
+	view = glGetIntegerv(GL_VIEWPORT)
+	img = wx.EmptyImage(view[2], view[3] )
+	pixels = glReadPixels(0, 0, view[2], view[3], GL_RGB,
+		             GL_UNSIGNED_BYTE)
+	img.SetData( pixels )
+	img = img.Mirror(False)
+	img.SaveFile(filename, wx.BITMAP_TYPE_PNG)
+
+def saveImage(canvas, filename):
+	s = wx.ScreenDC()
+	w, h = canvas.size.Get()
+	b = wx.EmptyBitmap(w, h)
+	m = wx.MemoryDCFromDC(s)
+	m.SelectObject(b)
+	m.Blit(0, 0, w, h, s, 70, 0)
+	m.SelectObject(wx.NullBitmap)
+	b.SaveFile(filename, wx.BITMAP_TYPE_PNG)
+	
+
+class MeshViewerCanvas(glcanvas.GLCanvas):
+	def __init__(self, parent, takeScreenshots, screenshotsPrefix = "", rotationAngle = 0):
+		attribs = (glcanvas.WX_GL_RGBA, glcanvas.WX_GL_DOUBLEBUFFER, glcanvas.WX_GL_DEPTH_SIZE, 24)
+		glcanvas.GLCanvas.__init__(self, parent, -1, attribList = attribs)	
+		self.context = glcanvas.GLContext(self)
 		
+		self.parent = parent
+		self.takeScreenshots = takeScreenshots
+		print "Taking screenshots: %s"%self.takeScreenshots
+		self.screenshotCounter = 1
+		self.screenshotsPrefix = screenshotsPrefix
+		self.rotationAngle = rotationAngle
 		#Camera state variables
-		self.outfilename = outfilename
-		self.mesh = PolyMesh()
-		self.mesh.loadFile(infilename)
-		self.meshBBox = self.mesh.getBBox()
-		#self.mesh = getBoxMesh(1, 2, 1, Point3D(1, 100, 1), 0.55)
-		#print self.mesh
-		#self.mesh.truncate(0.2)
-		#print self.mesh
-		#self.camera = MouseSphericalCamera(self.GLUTwindow_width, self.GLUTwindow_height)
-		self.camera = MousePolarCamera(self.GLUTwindow_width, self.GLUTwindow_height)
-		self.camera.centerOnMesh(self.mesh)
-		random.seed()
-		self.cutPlane = None
-		self.planeBorder = []
+		self.size = self.GetClientSize()
+		#self.camera = MouseSphericalCamera(self.size.x, self.size.y)
+		self.camera = MousePolarCamera(self.size.width, self.size.height)
 		
-		self.initGL()
+		#Main state variables
+		self.MousePos = [0, 0]
+		self.initiallyResized = False
 
-	def GLUTResize(self, w, h):
-		glViewport(0, 0, w, h)
-		self.GLUTwindow_width = w
-		self.GLUTwindow_height = h
-		self.camera.pixWidth = w
-		self.camera.pixHeight = h
-		glutPostRedisplay()
+		self.bbox = BBox3D()
+		self.unionbbox = BBox3D()
+		random.seed()
+		
+		#Face mesh variables and manipulation variables
+		self.faceMesh = None
+		self.displayMeshFaces = True
+		self.displayMeshEdges = False
+		self.displayMeshVertices = False
+		self.displayMeshNormals = False
+		self.vertexColors = np.zeros(0)
+		
+		self.cutPlane = None
+		self.displayCutPlane = False
+		
+		self.GLinitialized = False
+		#GL-related events
+		wx.EVT_ERASE_BACKGROUND(self, self.processEraseBackgroundEvent)
+		wx.EVT_SIZE(self, self.processSizeEvent)
+		wx.EVT_PAINT(self, self.processPaintEvent)
+		#Mouse Events
+		wx.EVT_LEFT_DOWN(self, self.MouseDown)
+		wx.EVT_LEFT_UP(self, self.MouseUp)
+		wx.EVT_RIGHT_DOWN(self, self.MouseDown)
+		wx.EVT_RIGHT_UP(self, self.MouseUp)
+		wx.EVT_MIDDLE_DOWN(self, self.MouseDown)
+		wx.EVT_MIDDLE_UP(self, self.MouseUp)
+		wx.EVT_MOTION(self, self.MouseMotion)		
+		#self.initGL()
+	
+	def initPointCloud(self, pointCloud):
+		self.pointCloud = pointCloud
+	
+	def viewFromFront(self, evt):
+		self.camera.centerOnBBox(self.bbox, theta = -math.pi/2, phi = math.pi/2)
+		self.Refresh()
+	
+	def viewFromTop(self, evt):
+		self.camera.centerOnBBox(self.bbox, theta = -math.pi/2, phi = 0)
+		self.Refresh()
+	
+	def viewFromSide(self, evt):
+		self.camera.centerOnBBox(self.bbox, theta = -math.pi, phi = math.pi/2)
+		self.Refresh()
+	
+	def displayMeshFacesCheckbox(self, evt):
+		self.displayMeshFaces = evt.Checked()
+		self.Refresh()
 
-	def GLUTRedraw(self):
+	def displayMeshEdgesCheckbox(self, evt):
+		self.displayMeshEdges = evt.Checked()
+		self.Refresh()
+		
+	def displayCutPlaneCheckbox(self, evt):
+		self.displayCutPlane = evt.Checked()
+		self.Refresh()
+
+	def displayMeshVerticesCheckbox(self, evt):
+		self.displayMeshVertices = evt.Checked()
+		self.Refresh()
+	
+	def CutWithPlane(self, evt):
+		if self.cutPlane:
+			self.faceMesh.sliceBelowPlane(self.cutPlane, False)
+			self.faceMesh.starTriangulate() #TODO: This is a patch to deal with "non-planar faces" added
+			self.Refresh()
+	
+	def ComputeGeodesicDistances(self, evt):
+		if not self.faceMesh:
+			print "ERROR: Haven't loaded mesh yet"
+			return
+		D = getGeodesicDistancesFMM(self.faceMesh)
+		D = D[0, :]
+		minD = min(D)
+		maxD = max(D)
+		print "Finished computing geodesic distances"
+		print "minD = %g, maxD = %g"%(minD, maxD)
+		N = D.shape[0]
+		cmConvert = cm.get_cmap('jet')
+		self.vertexColors = np.zeros((N, 3))
+		for i in range(0, N):
+			self.vertexColors[i, :] = cmConvert((D[i] - minD)/(maxD - minD))[0:3]
+		self.Refresh()
+	
+	def processEraseBackgroundEvent(self, event): pass #avoid flashing on MSW.
+
+	def processSizeEvent(self, event):
+		self.size = self.GetClientSize()
+		self.SetCurrent(self.context)
+		glViewport(0, 0, self.size.width, self.size.height)
+		if not self.initiallyResized:
+			#The canvas gets resized once on initialization so the camera needs
+			#to be updated accordingly at that point
+			self.camera = MousePolarCamera(self.size.width, self.size.height)
+			self.camera.centerOnBBox(self.bbox, math.pi/2, math.pi/2)
+			self.initiallyResized = True
+
+	def processPaintEvent(self, event):
+		dc = wx.PaintDC(self)
+		self.SetCurrent(self.context)
+		if not self.GLinitialized:
+			self.initGL()
+			self.GLinitialized = True
+		self.repaint()
+
+	def repaint(self):
 		#Set up projection matrix
 		glMatrixMode(GL_PROJECTION)
 		glLoadIdentity()
-		farDist = (self.camera.eye - self.meshBBox.getCenter()).Length()*2
+		farDist = (self.camera.eye - self.bbox.getCenter()).Length()*2
 		#This is to make sure we can see on the inside
-		farDist = max(farDist, self.meshBBox.getDiagLength())
+		farDist = max(farDist, self.unionbbox.getDiagLength()*2)
 		nearDist = farDist/50.0
-		gluPerspective(180.0*self.camera.yfov/M_PI, float(self.GLUTwindow_width)/self.GLUTwindow_height, nearDist, farDist)
+		gluPerspective(180.0*self.camera.yfov/M_PI, float(self.size.x)/self.size.y, nearDist, farDist)
 		
 		#Set up modelview matrix
 		self.camera.gotoCameraFrame()	
@@ -69,152 +189,26 @@ class Viewer(object):
 		glMaterialfv(GL_FRONT_AND_BACK, GL_AMBIENT_AND_DIFFUSE, [0.8, 0.8, 0.8, 1.0]);
 		glMaterialfv(GL_FRONT_AND_BACK, GL_SPECULAR, [0.2, 0.2, 0.2, 1.0])
 		glMaterialfv(GL_FRONT_AND_BACK, GL_SHININESS, 64)
-
-		self.mesh.renderGL(self.drawEdges, self.drawVerts, self.drawNormals, self.planeBorder)
-		#self.mesh.renderCCWEdgesDebug()
 		
-		if self.drawCutPlane:
+		if self.faceMesh:
+			self.faceMesh.renderGL(self.displayMeshEdges, self.displayMeshVertices, self.displayMeshNormals, self.displayMeshFaces, None)
+		
+		if self.displayCutPlane:
 			t = farDist*self.camera.towards
-			r = farDist*(t % self.camera.up)
+			r = t % self.camera.up
+			u = farDist*self.camera.up
 			dP0 = farDist / 10.0
 			#dP0 = 1
-			P0 = self.camera.eye - dP0*self.camera.up
-			self.cutPlane = getRectMesh(P0 + t + r, P0 + t - r, P0 - t - r, P0 - t + r)
+			P0 = self.camera.eye - (dP0/farDist/10.0)*r
+			cutPlaneMesh = getRectMesh(P0 + t + u, P0 + t - u, P0 - t - u, P0 - t + u)
 			glDisable(GL_LIGHTING)
 			glColor3f(0, 1, 0)
-			self.cutPlane.renderGL()
+			cutPlaneMesh.renderGL()
+			self.cutPlane = Plane3D(P0, r)
 		
-		glutSwapBuffers()
+		self.SwapBuffers()
 	
-	def handleMouseStuff(self, x, y):
-		y = self.GLUTwindow_height - y
-		self.GLUTmouse[0] = x
-		self.GLUTmouse[1] = y
-		self.GLUTmodifiers = glutGetModifiers()
-	
-	def GLUTKeyboard(self, key, x, y):
-		self.handleMouseStuff(x, y)
-		self.keys[key] = True
-		glutPostRedisplay()
-	
-	def GLUTKeyboardUp(self, key, x, y):
-		self.handleMouseStuff(x, y)
-		self.keys[key] = False
-		if key in ['c', 'C']:
-			if len(self.mesh.components) == 0:
-				self.mesh.getConnectedComponents()
-			counts = self.mesh.getConnectedComponentCounts()
-			print "CONNECTED COMPONENTS: "
-			total = 0
-			for i in range(0, len(counts)):
-				print "%i: %i"%(i, counts[i])
-				total = total + counts[i]
-			print "%i vertices in mesh, sum of components is %i"%(len(self.mesh.vertices), total)
-			self.mesh.deleteAllButLargestConnectedComponent()
-			print "Number of vertices now: %i"%len(self.mesh.vertices)
-			print self.mesh
-		elif key in ['e', 'E']:
-			self.drawEdges = 1 - self.drawEdges
-		elif key in ['h', 'H']:
-			self.mesh.fillHoles()
-		elif key in ['v', 'V']:
-			self.drawVerts = 1 - self.drawVerts
-		elif key in ['n', 'N']:
-			self.drawNormals = 1 - self.drawNormals
-		elif key in ['o', 'O']:
-			#Save mesh
-			self.mesh.saveFile(self.outfilename, True)
-		elif key in ['p', 'P']:
-			self.drawCutPlane = 1 - self.drawCutPlane
-		elif key in ['r', 'R']:
-			#Rotate mesh to align with viewpoint
-			[t, u, r] = [self.camera.towards, self.camera.up, self.camera.towards%self.camera.up]
-			rotMat = Matrix4([r.x, u.x, -t.x, 0, r.y, u.y, -t.y, 0, r.z, u.z, -t.z, 0, 0, 0, 0, 1])
-			rotMat = rotMat.Inverse()
-			self.mesh.Transform(rotMat)
-			centroid = self.mesh.getCentroid()
-			bbox = self.mesh.getBBox()
-			minZ = min([v.pos.z for v in self.mesh.vertices])
-			dV = -1*centroid
-			dV.z = -minZ
-			self.mesh.Translate(dV)
-			#scale = 1.0/max([bbox.XLen(), bbox.YLen(), bbox.ZLen()])
-			#self.mesh.Scale(scale, scale, scale)
-			self.camera.centerOnMesh(self.mesh)
-			print "minZ = %g"%(min([v.pos.z for v in self.mesh.vertices]))
-			print "centroid = %s"%self.mesh.getCentroid()
-		elif key in ['s', 'S']:
-			self.mesh.sliceBelowPlane(self.cutPlane.faces[0].getPlane())
-		elif key in ['t', 'T']:
-			print "Triangulating mesh"
-			print self.mesh
-			self.mesh.minTrianglesRemesh()
-			print self.mesh
-		elif key in ['d', 'D']:
-			#Print depth image
-			width = self.GLUTwindow_width
-			height = self.GLUTwindow_height
-			pixels = glReadPixelsb(0, 0, width, height, GL_DEPTH_COMPONENT, GL_FLOAT)
-			fout = open('getDepth.m', 'w')
-			fout.write("depth = [")
-			for y in range(0, height):
-				for x in range(0, width):
-					fout.write("%s "%pixels[height-y-1][x])
-				fout.write(";\n")
-			fout.write("];")
-		elif key in ['q', 'Q']:
-			sys.exit()
-		glutPostRedisplay()
-	
-	def GLUTSpecial(self, key, x, y):
-		self.handleMouseStuff(x, y)
-		self.keys[key] = True
-		glutPostRedisplay()
-	
-	def GLUTSpecialUp(self, key, x, y):
-		self.handleMouseStuff(x, y)
-		self.keys[key] = False
-		glutPostRedisplay()
-		
-	def GLUTMouse(self, button, state, x, y):
-		buttonMap = {GLUT_LEFT_BUTTON:0, GLUT_MIDDLE_BUTTON:1, GLUT_RIGHT_BUTTON:2, 3:3, 4:4}
-		if state == GLUT_DOWN:
-			self.GLUTButton[buttonMap[button]] = 1
-		else:
-			self.GLUTButton[buttonMap[button]] = 0
-		self.handleMouseStuff(x, y)
-		glutPostRedisplay()
-
-	def GLUTMotion(self, x, y):
-		lastX = self.GLUTmouse[0]
-		lastY = self.GLUTmouse[1]
-		self.handleMouseStuff(x, y)
-		dX = self.GLUTmouse[0] - lastX
-		dY = self.GLUTmouse[1] - lastY
-		if self.GLUTButton[2] == 1:
-			self.camera.zoom(-dY)#Want to zoom in as the mouse goes up
-		elif self.GLUTButton[1] == 1:
-			self.camera.translate(dX, dY)
-		else:
-			self.camera.orbitLeftRight(dX)
-			self.camera.orbitUpDown(dY)
-		glutPostRedisplay()
-	
-	def initGL(self):
-		glutInit('')
-		glutInitDisplayMode(GLUT_DOUBLE | GLUT_RGB | GLUT_DEPTH)
-		glutInitWindowSize(self.GLUTwindow_width, self.GLUTwindow_height)
-		glutInitWindowPosition(50, 50)
-		glutCreateWindow('Viewer')
-		glutReshapeFunc(self.GLUTResize)
-		glutDisplayFunc(self.GLUTRedraw)
-		glutKeyboardFunc(self.GLUTKeyboard)
-		glutKeyboardUpFunc(self.GLUTKeyboardUp)
-		glutSpecialFunc(self.GLUTSpecial)
-		glutSpecialUpFunc(self.GLUTSpecialUp)
-		glutMouseFunc(self.GLUTMouse)
-		glutMotionFunc(self.GLUTMotion)
-		
+	def initGL(self):		
 		glLightModelfv(GL_LIGHT_MODEL_AMBIENT, [0.2, 0.2, 0.2, 1.0])
 		glLightModeli(GL_LIGHT_MODEL_LOCAL_VIEWER, GL_TRUE)
 		glLightfv(GL_LIGHT0, GL_DIFFUSE, [1.0, 1.0, 1.0, 1.0])
@@ -223,18 +217,183 @@ class Viewer(object):
 		glEnable(GL_LIGHT1)
 		glEnable(GL_NORMALIZE)
 		glEnable(GL_LIGHTING)
-		
 		glEnable(GL_DEPTH_TEST)
+
+	def handleMouseStuff(self, x, y):
+		#Invert y from what the window manager says
+		y = self.size.height - y
+		self.MousePos = [x, y]
+
+	def MouseDown(self, evt):
+		x, y = evt.GetPosition()
+		self.CaptureMouse()
+		self.handleMouseStuff(x, y)
+		self.Refresh()
+	
+	def MouseUp(self, evt):
+		x, y = evt.GetPosition()
+		self.handleMouseStuff(x, y)
+		self.ReleaseMouse()
+		self.Refresh()
+
+	def MouseMotion(self, evt):
+		x, y = evt.GetPosition()
+		[lastX, lastY] = self.MousePos
+		self.handleMouseStuff(x, y)
+		dX = self.MousePos[0] - lastX
+		dY = self.MousePos[1] - lastY
+		if evt.Dragging():
+			if evt.MiddleIsDown():
+				self.camera.translate(dX, dY)
+			elif evt.RightIsDown():
+				self.camera.zoom(-dY)#Want to zoom in as the mouse goes up
+			elif evt.LeftIsDown():
+				self.camera.orbitLeftRight(dX)
+				self.camera.orbitUpDown(dY)
+		self.Refresh()
+
+class MeshViewerFrame(wx.Frame):
+	(ID_LOADDATASET, ID_SAVEDATASET) = (0, 1)
+	
+	def __init__(self, parent, id, title, pos=DEFAULT_POS, size=DEFAULT_SIZE, style=wx.DEFAULT_FRAME_STYLE, name = 'GLWindow', takeScreenshots = False, screenshotsPrefix = "", rotationAngle = 0):
+		style = style | wx.NO_FULL_REPAINT_ON_RESIZE
+		super(MeshViewerFrame, self).__init__(parent, id, title, pos, size, style, name)
+		#Initialize the menu
+		self.CreateStatusBar()
 		
-		glutMainLoop()
+		self.size = size
+		self.pos = pos
+		print "MeshViewerFrameSize = %s, pos = %s"%(self.size, self.pos)
+		
+		filemenu = wx.Menu()
+		menuOpenFace = filemenu.Append(MeshViewerFrame.ID_LOADDATASET, "&Load Face","Load a triangular mesh representing a face")
+		self.Bind(wx.EVT_MENU, self.OnLoadMesh, menuOpenFace)
+		menuSaveFace = filemenu.Append(MeshViewerFrame.ID_SAVEDATASET, "&Save Face", "Save the edited triangular mesh")
+		self.Bind(wx.EVT_MENU, self.OnSaveFace, menuSaveFace)
+		menuExit = filemenu.Append(wx.ID_EXIT,"E&xit"," Terminate the program")
+		self.Bind(wx.EVT_MENU, self.OnExit, menuExit)
+		
+		# Creating the menubar.
+		menuBar = wx.MenuBar()
+		menuBar.Append(filemenu,"&File") # Adding the "filemenu" to the MenuBar
+		self.SetMenuBar(menuBar)  # Adding the MenuBar to the Frame content.
+		self.glcanvas = MeshViewerCanvas(self, takeScreenshots, screenshotsPrefix, rotationAngle)
+		
+		self.rightPanel = wx.BoxSizer(wx.VERTICAL)
+		
+		#Buttons to go to a default view
+		viewPanel = wx.BoxSizer(wx.HORIZONTAL)
+		topViewButton = wx.Button(self, -1, "Top")
+		self.Bind(wx.EVT_BUTTON, self.glcanvas.viewFromTop, topViewButton)
+		viewPanel.Add(topViewButton, 0, wx.EXPAND)
+		sideViewButton = wx.Button(self, -1, "Side")
+		self.Bind(wx.EVT_BUTTON, self.glcanvas.viewFromSide, sideViewButton)
+		viewPanel.Add(sideViewButton, 0, wx.EXPAND)
+		frontViewButton = wx.Button(self, -1, "Front")
+		self.Bind(wx.EVT_BUTTON, self.glcanvas.viewFromFront, frontViewButton)
+		viewPanel.Add(frontViewButton, 0, wx.EXPAND)
+		self.rightPanel.Add(wx.StaticText(self, label="Views"), 0, wx.EXPAND)
+		self.rightPanel.Add(viewPanel, 0, wx.EXPAND)
+		
+		#Checkboxes for displaying data
+		self.displayMeshFacesCheckbox = wx.CheckBox(self, label = "Display Mesh Faces")
+		self.displayMeshFacesCheckbox.SetValue(True)
+		self.Bind(wx.EVT_CHECKBOX, self.glcanvas.displayMeshFacesCheckbox, self.displayMeshFacesCheckbox)
+		self.rightPanel.Add(self.displayMeshFacesCheckbox, 0, wx.EXPAND)
+		self.displayMeshEdgesCheckbox = wx.CheckBox(self, label = "Display Mesh Edges")
+		self.displayMeshEdgesCheckbox.SetValue(False)
+		self.Bind(wx.EVT_CHECKBOX, self.glcanvas.displayMeshEdgesCheckbox, self.displayMeshEdgesCheckbox)
+		self.rightPanel.Add(self.displayMeshEdgesCheckbox, 0, wx.EXPAND)
+		self.displayMeshVerticesCheckbox = wx.CheckBox(self, label = "Display Mesh Points")
+		self.displayMeshVerticesCheckbox.SetValue(False)
+		self.Bind(wx.EVT_CHECKBOX, self.glcanvas.displayMeshVerticesCheckbox, self.displayMeshVerticesCheckbox)
+		self.rightPanel.Add(self.displayMeshVerticesCheckbox, 0, wx.EXPAND)
+
+		#Checkboxes and buttons for manipulating the cut plane
+		self.rightPanel.Add(wx.StaticText(self, label="Cutting Plane"), 0, wx.EXPAND)
+		self.displayCutPlaneCheckbox = wx.CheckBox(self, label = "Display Cut Plane")
+		self.displayCutPlaneCheckbox.SetValue(False)
+		self.Bind(wx.EVT_CHECKBOX, self.glcanvas.displayCutPlaneCheckbox, self.displayCutPlaneCheckbox)
+		self.rightPanel.Add(self.displayCutPlaneCheckbox, 0, wx.EXPAND)
+		CutWithPlaneButton = wx.Button(self, -1, "Cut With Plane")
+		self.Bind(wx.EVT_BUTTON, self.glcanvas.CutWithPlane, CutWithPlaneButton)
+		self.rightPanel.Add(CutWithPlaneButton)
+		
+		#Buttons for computing geodesic distance
+		self.rightPanel.Add(wx.StaticText(self, label="Geodesic Distances"), 0, wx.EXPAND)
+		ComputeGeodesicButton = wx.Button(self, -1, "Compute Geodesic Distances")
+		self.Bind(wx.EVT_BUTTON, self.glcanvas.ComputeGeodesicDistances, ComputeGeodesicButton)
+		self.rightPanel.Add(ComputeGeodesicButton)
+
+		#Finally add the two main panels to the sizer		
+		self.sizer = wx.BoxSizer(wx.HORIZONTAL)
+		#cubecanvas = CubeCanvas(self)
+		#self.sizer.Add(cubecanvas, 2, wx.EXPAND)
+		self.sizer.Add(self.glcanvas, 2, wx.EXPAND)
+		self.sizer.Add(self.rightPanel, 0, wx.EXPAND)
+		
+		self.SetSizer(self.sizer)
+		self.Layout()
+		#self.SetAutoLayout(1)
+		#self.sizer.Fit(self)
+		self.Show()
+	
+	def OnLoadMesh(self, evt):
+		dlg = wx.FileDialog(self, "Choose a file", ".", "", "OBJ files (*.obj)|*.obj|OFF files (*.off)|*.off", wx.OPEN)
+		if dlg.ShowModal() == wx.ID_OK:
+			filename = dlg.GetFilename()
+			dirname = dlg.GetDirectory()
+			filepath = os.path.join(dirname, filename)
+			print dirname
+			self.glcanvas.faceMesh = PolyMesh()
+			print "Loading mesh %s..."%filename
+			self.glcanvas.faceMesh.loadFile(filepath)
+			print "Finished loading mesh\n %s"%self.glcanvas.faceMesh
+			#print "Deleting all but largest connected component..."
+			#self.glcanvas.faceMesh.deleteAllButLargestConnectedComponent()
+			print self.glcanvas.faceMesh
+			self.glcanvas.bbox = self.glcanvas.faceMesh.getBBox()
+			print "Mesh BBox: %s\n"%self.glcanvas.bbox
+			self.glcanvas.camera.centerOnBBox(self.glcanvas.bbox, theta = -math.pi/2, phi = math.pi/2)
+			self.glcanvas.Refresh()
+		dlg.Destroy()
+		return
+
+	def OnSaveFace(self, evt):
+		dlg = wx.FileDialog(self, "Choose a file", ".", "", "*", wx.SAVE)
+		if dlg.ShowModal() == wx.ID_OK:
+			filename = dlg.GetFilename()
+			dirname = dlg.GetDirectory()
+			filepath = os.path.join(dirname, filename)
+			self.glcanvas.faceMesh.saveFile(filepath, True)
+			self.glcanvas.Refresh()
+		dlg.Destroy()
+		return
+
+	def OnExit(self, evt):
+		self.Close(True)
+		return
+
+class MeshViewer(object):
+	def __init__(self, filename = None, ts = False, sp = "", ra = 0):
+		app = wx.App()
+		frame = MeshViewerFrame(None, -1, 'MeshViewer', takeScreenshots = ts, screenshotsPrefix = sp, rotationAngle = ra)
+		if (filename):
+			frame.OnLoadAzElZDataset(filename)
+		frame.Show(True)
+		app.MainLoop()
+		app.Destroy()
 
 if __name__ == '__main__':
-	if len(argv) < 2:
-		print "Usage: meshView <mesh filepath> <out filename (optional)>"
-	else:
-		if len(argv) < 3:
-			#The user has chosen an input name only
-			viewer = Viewer(argv[1])
-		else:
-			#The user has chosen an output filename to save
-			viewer = Viewer(argv[1], argv[2])
+	filename = None
+	if len(argv) > 1:
+		filename = argv[1]
+	takeScreenshots = False
+	screenshotsPrefix = ""
+	rotationAngle = 0
+	if len(argv) >= 3:
+		takeScreenshots = True
+		screenshotsPrefix = argv[2]
+	if len(argv) >= 4:
+		rotationAngle = int(argv[3])
+	viewer = MeshViewer(filename, takeScreenshots, screenshotsPrefix, rotationAngle)
