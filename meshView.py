@@ -270,7 +270,7 @@ class MeshViewerCanvas(glcanvas.GLCanvas):
 		self.Refresh()
 
 class MeshViewerFrame(wx.Frame):
-	(ID_LOADDATASET, ID_SAVEDATASET) = (0, 1)
+	(ID_LOADDATASET, ID_SAVEDATASET) = (1, 2)
 	
 	def __init__(self, parent, id, title, pos=DEFAULT_POS, size=DEFAULT_SIZE, style=wx.DEFAULT_FRAME_STYLE, name = 'GLWindow', takeScreenshots = False, screenshotsPrefix = "", rotationAngle = 0):
 		style = style | wx.NO_FULL_REPAINT_ON_RESIZE
