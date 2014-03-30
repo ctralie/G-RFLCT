@@ -104,7 +104,7 @@ class MeshFace(object):
 	def getArea(self):
 		if not self.area:
 			verts = self.getVertices()
-			self.area = getPolygonArea(verts)
+			self.area = getPolygonArea([v.pos for v in verts])
 		return self.area
 	
 	def getCentroid(self):
