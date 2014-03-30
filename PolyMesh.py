@@ -215,6 +215,14 @@ def getEdgeInCommon(v1, v2):
 			return e
 	return None
 
+def getVertexInCommon(e1, e2):
+	v = [e1.v1, e1.v2, e2.v1, e2.v2]
+	for i in range(4):
+		for j in range(i+1, 4):
+			if v[i] == v[j]:
+				return v[i]
+	return None
+
 #############################################################
 ####                	POLYGON MESH                    #####
 #############################################################
@@ -384,6 +392,32 @@ class PolyMesh(object):
 		#Copy over the face list since it's about to be modified
 		faces = list(self.faces)
 		self.starRemeshFaces(faces)
+	
+	#This function works best starting with triangular meshes
+	def evenTriangleRemesh(self):
+		for e in self.edges:
+			pos = e.getCenter()
+			e.centerVertex = self.addVertex(pos)
+		facesToAdd = []
+		for f in self.faces:
+			#Add the faces along the outside
+			for i in range(0, len(f.edges)):
+				e1 = f.edges[i]
+				e2 = f.edges[(i+1)%len(f.edges)]
+				v = getVertexInCommon(e1, e2)
+				facesToAdd.append([e1.centerVertex, v, e2.centerVertex])
+			#Add the face in the center
+			facesToAdd.append([e.centerVertex for e in f.edges])
+		
+		#Remove every face and every original edge
+		#and add the new faces (which will implicitly 
+		#add the new split edges)
+		self.faces = []
+		self.edges = []
+		for v in self.vertices:
+			v.edges.clear()
+		for f in facesToAdd:
+			self.addFace(f)
 	
 	#Triangulate all faces that are not triangular by using
 	#the star scheme
@@ -1115,7 +1149,51 @@ def getRectMesh(P0, P1, P2, P3, stepSize = -1):
 	addFaceTiles(mesh, stepSize, edges[0], edges[1], edges[2], edges[3])
 	return mesh
 
-if __name__ == '__main__':
+def getTetrahedronMesh():
+	mesh = PolyMesh()
+	v1 = mesh.addVertex(Point3D(-1, 1, 1))
+	v2 = mesh.addVertex(Point3D(1, -1, 1))
+	v3 = mesh.addVertex(Point3D(1, 1, -1))
+	v4 = mesh.addVertex(Point3D(-1, -1, -1))
+	mesh.addFace([v1, v2, v3])
+	mesh.addFace([v2, v4, v3])
+	mesh.addFace([v3, v4, v1])
+	mesh.addFace([v4, v2, v1])
+	return mesh
+
+def getOctahedronMesh():
+	mesh = PolyMesh()
+	v1 = mesh.addVertex(Point3D(0, 0, 1))
+	v2 = mesh.addVertex(Point3D(1, 0, 0))
+	v3 = mesh.addVertex(Point3D(0, 1, 0))
+	v4 = mesh.addVertex(Point3D(0, -1, 0))
+	v5 = mesh.addVertex(Point3D(0, 0, -1))
+	v6 = mesh.addVertex(Point3D(-1, 0, 0))
+	#Top Part
+	mesh.addFace([v3, v1, v2])
+	mesh.addFace([v3, v2, v5])
+	mesh.addFace([v3, v5, v6])
+	mesh.addFace([v3, v6, v1])
+	#Bottom Part
+	mesh.addFace([v1, v4, v2])
+	mesh.addFace([v2, v4, v5])
+	mesh.addFace([v5, v4, v6])
+	mesh.addFace([v6, v4, v1])
+	return mesh
+
+def getSphereMesh(R, nIters):
+	mesh = getOctahedronMesh()
+	for i in range(nIters):
+		mesh.evenTriangleRemesh()
+		#Move points so that they're R away from the origin
+		for v in mesh.vertices:
+			P = v.pos
+			L = P.Length()
+			scale = R/L
+			v.pos = scale*P
+	return mesh
+
+if __name__ == '__main__2':
 	mesh = PolyMesh()
 	mesh.loadFile("meshes/cube.obj")
 	#mesh.removeFace(mesh.faces[10])
@@ -1127,3 +1205,7 @@ if __name__ == '__main__':
 	mesh.removeVertex(mesh.vertices[2])	
 	for v in mesh.vertices:
 		print v.ID, " ",
+
+if __name__ == '__main__':
+	sphereMesh = getSphereMesh(1, 2)
+	sphereMesh.saveOffFile('sphere.off')

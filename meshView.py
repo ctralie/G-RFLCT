@@ -153,10 +153,10 @@ class MeshViewerCanvas(glcanvas.GLCanvas):
 		#g: MxY numpy array representing values of the constraints, where Y is the dimension
 		#and M is the number of constraints
 		N = len(self.mesh.vertices)
-		constraints = [ [(0, 1)], [(N-1, 1)] ]
+		constraints = [ [(0, 1)], [(N-1, 1)], [(int(math.floor(N/2)), 1) ] ]
 		deltaCoords = np.zeros((N, 3))
 		#Make the first vertex blue and the last vertex red
-		g = np.array([ [1.0, 0.0, 0.0], [0.0, 0.0, 1.0]])
+		g = np.array([ [1.0, 0.0, 0.0], [0.0, 0.0, 1.0], [0.0, 1.0, 0.0] ])
 		colors = self.mesh.solveFunctionWithConstraints(constraints, deltaCoords, g)
 		for i in range(0, N):
 			self.mesh.vertices[i].color = [a for a in colors[i]]
