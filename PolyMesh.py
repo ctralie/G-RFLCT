@@ -1181,6 +1181,21 @@ def getOctahedronMesh():
 	mesh.addFace([v6, v4, v1])
 	return mesh
 
+def getHemiOctahedronMesh():
+	mesh = PolyMesh()
+	v1 = mesh.addVertex(Point3D(0, 0, 1))
+	v2 = mesh.addVertex(Point3D(1, 0, 0))
+	v3 = mesh.addVertex(Point3D(0, 1, 0))
+	v4 = mesh.addVertex(Point3D(0, -1, 0))
+	v6 = mesh.addVertex(Point3D(-1, 0, 0))
+	#Top Part
+	mesh.addFace([v3, v1, v2])
+	mesh.addFace([v3, v6, v1])
+	#Bottom Part
+	mesh.addFace([v1, v4, v2])
+	mesh.addFace([v6, v4, v1])
+	return mesh
+
 def getSphereMesh(R, nIters):
 	mesh = getOctahedronMesh()
 	for i in range(nIters):
@@ -1192,6 +1207,18 @@ def getSphereMesh(R, nIters):
 			scale = R/L
 			v.pos = scale*P
 	return mesh
+
+def getHemiSphereMesh(R, nIters):
+	mesh = getHemiOctahedronMesh()
+	for i in range(nIters):
+		mesh.evenTriangleRemesh()
+		#Move points so that they're R away from the origin
+		for v in mesh.vertices:
+			P = v.pos
+			L = P.Length()
+			scale = R/L
+			v.pos = scale*P
+	return mesh	
 
 if __name__ == '__main__2':
 	mesh = PolyMesh()
