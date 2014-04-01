@@ -5,6 +5,8 @@
 #still use all of the 3D primitive classes to describe objects, they
 #are just degenerate cases (e.g. Point3D(x, y, 0) describes a 2D point)
 from Primitives3D import *
+import numpy as np
+import numpy.linalg as linalg
 
 #This helper function is used to print 2D polygons
 #as parallel lists of x and y coordinates
@@ -227,6 +229,18 @@ def pointInsideConvexPolygon2D(poly, P, CLOSENESS_EPS = EPS):
 		if pointInsideTriangle2D(A, B, C, P, CLOSENESS_EPS):
 			return True
 	return False
+
+#Get the barycentric coordinates of X inside of the triangle ABC on the plane
+#(Z coordinate is ignored)
+def getBarycentridCoords(A, B, C, X):
+	T = np.array( [ [A.x - C.x, B.x - C.x ], [A.y - C.y, B.y - C.y] ] )
+	y = np.array( [ [X.x - C.x], [X.y - C.y] ] )
+	lambdas = linalg.solve(T, y)
+	lambdas = lambdas.flatten()
+	lambdas = np.append(lambdas, 1 - (lambdas[0] + lambdas[1]))
+	assert (lambdas[0] >= 0 and lambdas[1] >= 0 and lambdas[2] >= 0)
+	return lambdas
+	
 
 if __name__ ==  '__main__':
 	Points1 = [ Point3D(151.747, 90.6552, 0) , Point3D(151.747, 50, 0) , Point3D(50, 50, 0) , Point3D(85.9002, 136.766, 0) , Point3D(116.439, 136.766, 0) ]

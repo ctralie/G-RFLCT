@@ -5,6 +5,7 @@ from Graphics3D import *
 import sys
 import re
 import numpy as np
+import numpy.linalg as linalg
 
 class MeshVertex(object):
 	def __init__(self, P, ID):
@@ -649,6 +650,30 @@ class PolyMesh(object):
 		for v in self.vertices:
 			bbox.addPoint(v.pos)
 		return bbox
+	
+	#Use PCA to find the principle axes of the vertices
+	def getPrincipalAxes(self):
+		C = self.getCentroid()
+		N = len(self.vertices)
+		X = np.zeros((N, 3))
+		for i in range(N):
+			V = self.vertices[i]
+			#Subtract off zero-order moment (centroid)
+			X[i, :] = [V.pos.x - C.x, V.pos.y - C.y, V.pos.z - C.z]
+		XTX = X.transpose().dot(X)
+		(lambdas, axes) = linalg.eig(XTX)
+		#Put the eigenvalues in decreasing order
+		idx = lambdas.argsort()[::-1]
+		lambdas = lambdas[idx]
+		axes = axes[:, idx]
+		print lambdas
+		Axis1 = Vector3D(axes[0, 0], axes[1, 0], axes[2, 0])
+		Axis2 = Vector3D(axes[0, 1], axes[1, 1], axes[2, 1])
+		Axis3 = Vector3D(axes[0, 2], axes[1, 2], axes[2, 2])
+		T = X.dot(axes)
+		maxProj = T.max(0)
+		minProj = T.min(0)
+		return (Axis1, Axis2, Axis3, maxProj, minProj)		
 	
 	#Delete the parts of the mesh below "plane".  If fillHoles
 	#is true, plug up the holes that result from the cut

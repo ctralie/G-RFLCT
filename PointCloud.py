@@ -75,6 +75,13 @@ class PointCloud(object):
 			self.needsDisplayUpdate = False
 		glCallList(self.DisplayList)
 
+	def getCentroid(self):
+		center = Vector3D(0.0, 0.0, 0.0)
+		for P in self.points:
+			center = center + Vector3D(P.x, P.y, P.z)
+		center = center * (1.0/float(len(self.points)))
+		return center
+
 	def getBBox(self):
 		if len(self.points) == 0:
 			return BBox3D(0, 0, 0, 0, 0, 0)
@@ -83,6 +90,30 @@ class PointCloud(object):
 		for P in self.points:
 			bbox.addPoint(P)
 		return bbox
+
+	#Use PCA to find the principle axes of the vertices
+	def getPrincipalAxes(self):
+		C = self.getCentroid()
+		N = len(self.points)
+		X = np.zeros((N, 3))
+		for i in range(N):
+			P = self.points[i]
+			#Subtract off zero-order moment (centroid)
+			X[i, :] = [P.x - C.x, P.y - C.y, P.z - C.z]
+		XTX = X.transpose().dot(X)
+		(lambdas, axes) = linalg.eig(XTX)
+		#Put the eigenvalues in decreasing order
+		idx = lambdas.argsort()[::-1]
+		lambdas = lambdas[idx]
+		axes = axes[:, idx]
+		print lambdas
+		Axis1 = Vector3D(axes[0, 0], axes[1, 0], axes[2, 0])
+		Axis2 = Vector3D(axes[0, 1], axes[1, 1], axes[2, 1])
+		Axis3 = Vector3D(axes[0, 2], axes[1, 2], axes[2, 2])
+		T = X.dot(axes)
+		maxProj = T.max(0)
+		minProj = T.min(0)
+		return (Axis1, Axis2, Axis3, maxProj, minProj)
 
 def getPointColorCube(NPoints = 20):
 	ret = PointCloud()

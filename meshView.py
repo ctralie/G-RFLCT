@@ -21,6 +21,7 @@ import time
 
 DEFAULT_SIZE = wx.Size(1200, 800)
 DEFAULT_POS = wx.Point(10, 10)
+PRINCIPAL_AXES_SCALEFACTOR = 1
 
 def saveImageGL(mvcanvas, filename):
 	view = glGetIntegerv(GL_VIEWPORT)
@@ -69,10 +70,13 @@ class MeshViewerCanvas(glcanvas.GLCanvas):
 		
 		#Face mesh variables and manipulation variables
 		self.mesh = None
+		self.meshCentroid = None
+		self.meshPrincipalAxes = None
 		self.displayMeshFaces = True
 		self.displayMeshEdges = False
 		self.displayMeshVertices = False
 		self.displayMeshNormals = False
+		self.displayPrincipalAxes = False
 		self.vertexColors = np.zeros(0)
 		
 		self.cutPlane = None
@@ -122,6 +126,10 @@ class MeshViewerCanvas(glcanvas.GLCanvas):
 
 	def displayMeshVerticesCheckbox(self, evt):
 		self.displayMeshVertices = evt.Checked()
+		self.Refresh()
+
+	def displayPrincipalAxesCheckbox(self, evt):
+		self.displayPrincipalAxes = evt.Checked()
 		self.Refresh()
 	
 	def CutWithPlane(self, evt):
@@ -209,6 +217,35 @@ class MeshViewerCanvas(glcanvas.GLCanvas):
 		
 		if self.mesh:
 			self.mesh.renderGL(self.displayMeshEdges, self.displayMeshVertices, self.displayMeshNormals, self.displayMeshFaces, None)
+			if self.displayPrincipalAxes:
+				(Axis1, Axis2, Axis3, maxProj, minProj)	= self.meshPrincipalAxes
+				C = self.meshCentroid
+				glDisable(GL_LIGHTING)
+				glLineWidth(5)
+				
+				glColor3f(1, 0, 0)
+				glBegin(GL_LINES)
+				glVertex3f(C.x, C.y, C.z)
+				A1 = C + maxProj[0]*PRINCIPAL_AXES_SCALEFACTOR*Axis1
+				glVertex3f(A1.x, A1.y, A1.z)
+				glEnd()
+				
+				glColor3f(0, 0, 1)
+				glBegin(GL_LINES)
+				glVertex3f(C.x, C.y, C.z)
+				A2 = C + maxProj[1]*PRINCIPAL_AXES_SCALEFACTOR*Axis2
+				glVertex3f(A2.x, A2.y, A2.z)
+				glEnd()				
+				
+				glColor3f(0, 1, 0)
+				glBegin(GL_LINES)
+				glVertex3f(C.x, C.y, C.z)
+				A3 = C + maxProj[2]*PRINCIPAL_AXES_SCALEFACTOR*Axis3
+				glVertex3f(A3.x, A3.y, A3.z)
+				glEnd()				
+				
+				glEnable(GL_LIGHTING)
+				
 		
 		if self.displayCutPlane:
 			t = farDist*self.camera.towards
@@ -325,6 +362,10 @@ class MeshViewerFrame(wx.Frame):
 		self.displayMeshVerticesCheckbox.SetValue(False)
 		self.Bind(wx.EVT_CHECKBOX, self.glcanvas.displayMeshVerticesCheckbox, self.displayMeshVerticesCheckbox)
 		self.rightPanel.Add(self.displayMeshVerticesCheckbox, 0, wx.EXPAND)
+		self.displayPrincipalAxesCheckbox = wx.CheckBox(self, label = "Display Principal Axes")
+		self.displayPrincipalAxesCheckbox.SetValue(False)
+		self.Bind(wx.EVT_CHECKBOX, self.glcanvas.displayPrincipalAxesCheckbox, self.displayPrincipalAxesCheckbox)
+		self.rightPanel.Add(self.displayPrincipalAxesCheckbox, 0, wx.EXPAND)
 
 		#Checkboxes and buttons for manipulating the cut plane
 		self.rightPanel.Add(wx.StaticText(self, label="Cutting Plane"), 0, wx.EXPAND)
@@ -371,6 +412,8 @@ class MeshViewerFrame(wx.Frame):
 			self.glcanvas.mesh = LaplacianMesh()
 			print "Loading mesh %s..."%filename
 			self.glcanvas.mesh.loadFile(filepath)
+			self.glcanvas.meshCentroid = self.glcanvas.mesh.getCentroid()
+			self.glcanvas.meshPrincipalAxes = self.glcanvas.mesh.getPrincipalAxes()
 			print "Finished loading mesh\n %s"%self.glcanvas.mesh
 			#print "Deleting all but largest connected component..."
 			#self.glcanvas.mesh.deleteAllButLargestConnectedComponent()
