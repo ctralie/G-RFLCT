@@ -91,7 +91,7 @@ class PointCloud(object):
 			bbox.addPoint(P)
 		return bbox
 
-	#Use PCA to find the principle axes of the vertices
+	#Use PCA to find the principal axes of the vertices
 	def getPrincipalAxes(self):
 		C = self.getCentroid()
 		N = len(self.points)
@@ -113,7 +113,7 @@ class PointCloud(object):
 		T = X.dot(axes)
 		maxProj = T.max(0)
 		minProj = T.min(0)
-		return (Axis1, Axis2, Axis3, maxProj, minProj)
+		return (Axis1, Axis2, Axis3, maxProj, minProj, axes)
 
 def getPointColorCube(NPoints = 20):
 	ret = PointCloud()

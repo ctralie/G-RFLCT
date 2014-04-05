@@ -651,7 +651,7 @@ class PolyMesh(object):
 			bbox.addPoint(v.pos)
 		return bbox
 	
-	#Use PCA to find the principle axes of the vertices
+	#Use PCA to find the principal axes of the vertices
 	def getPrincipalAxes(self):
 		C = self.getCentroid()
 		N = len(self.vertices)
@@ -673,7 +673,7 @@ class PolyMesh(object):
 		T = X.dot(axes)
 		maxProj = T.max(0)
 		minProj = T.min(0)
-		return (Axis1, Axis2, Axis3, maxProj, minProj)		
+		return (Axis1, Axis2, Axis3, maxProj, minProj, axes)		
 	
 	#Delete the parts of the mesh below "plane".  If fillHoles
 	#is true, plug up the holes that result from the cut

@@ -44,17 +44,12 @@ def saveImage(canvas, filename):
 	
 
 class MeshViewerCanvas(glcanvas.GLCanvas):
-	def __init__(self, parent, takeScreenshots, screenshotsPrefix = "", rotationAngle = 0):
+	def __init__(self, parent):
 		attribs = (glcanvas.WX_GL_RGBA, glcanvas.WX_GL_DOUBLEBUFFER, glcanvas.WX_GL_DEPTH_SIZE, 24)
 		glcanvas.GLCanvas.__init__(self, parent, -1, attribList = attribs)	
 		self.context = glcanvas.GLContext(self)
 		
 		self.parent = parent
-		self.takeScreenshots = takeScreenshots
-		print "Taking screenshots: %s"%self.takeScreenshots
-		self.screenshotCounter = 1
-		self.screenshotsPrefix = screenshotsPrefix
-		self.rotationAngle = rotationAngle
 		#Camera state variables
 		self.size = self.GetClientSize()
 		#self.camera = MouseSphericalCamera(self.size.x, self.size.y)
@@ -218,7 +213,7 @@ class MeshViewerCanvas(glcanvas.GLCanvas):
 		if self.mesh:
 			self.mesh.renderGL(self.displayMeshEdges, self.displayMeshVertices, self.displayMeshNormals, self.displayMeshFaces, None)
 			if self.displayPrincipalAxes:
-				(Axis1, Axis2, Axis3, maxProj, minProj)	= self.meshPrincipalAxes
+				(Axis1, Axis2, Axis3, maxProj, minProj, axes)	= self.meshPrincipalAxes
 				C = self.meshCentroid
 				glDisable(GL_LIGHTING)
 				glLineWidth(5)
@@ -307,9 +302,9 @@ class MeshViewerCanvas(glcanvas.GLCanvas):
 		self.Refresh()
 
 class MeshViewerFrame(wx.Frame):
-	(ID_LOADDATASET, ID_SAVEDATASET) = (1, 2)
+	(ID_LOADDATASET, ID_SAVEDATASET, ID_SAVESCREENSHOT) = (1, 2, 3)
 	
-	def __init__(self, parent, id, title, pos=DEFAULT_POS, size=DEFAULT_SIZE, style=wx.DEFAULT_FRAME_STYLE, name = 'GLWindow', takeScreenshots = False, screenshotsPrefix = "", rotationAngle = 0):
+	def __init__(self, parent, id, title, pos=DEFAULT_POS, size=DEFAULT_SIZE, style=wx.DEFAULT_FRAME_STYLE, name = 'GLWindow'):
 		style = style | wx.NO_FULL_REPAINT_ON_RESIZE
 		super(MeshViewerFrame, self).__init__(parent, id, title, pos, size, style, name)
 		#Initialize the menu
@@ -323,7 +318,9 @@ class MeshViewerFrame(wx.Frame):
 		menuOpenMesh = filemenu.Append(MeshViewerFrame.ID_LOADDATASET, "&Load Mesh","Load a polygon mesh")
 		self.Bind(wx.EVT_MENU, self.OnLoadMesh, menuOpenMesh)
 		menuSaveMesh = filemenu.Append(MeshViewerFrame.ID_SAVEDATASET, "&Save Mesh", "Save the edited polygon mesh")
-		self.Bind(wx.EVT_MENU, self.OnSaveFace, menuSaveMesh)
+		self.Bind(wx.EVT_MENU, self.OnSaveMesh, menuSaveMesh)
+		menuSaveScreenshot = filemenu.Append(MeshViewerFrame.ID_SAVESCREENSHOT, "&Save Screenshot", "Save a screenshot of the GL Canvas")
+		self.Bind(wx.EVT_MENU, self.OnSaveScreenshot, menuSaveScreenshot)
 		menuExit = filemenu.Append(wx.ID_EXIT,"E&xit"," Terminate the program")
 		self.Bind(wx.EVT_MENU, self.OnExit, menuExit)
 		
@@ -331,7 +328,7 @@ class MeshViewerFrame(wx.Frame):
 		menuBar = wx.MenuBar()
 		menuBar.Append(filemenu,"&File") # Adding the "filemenu" to the MenuBar
 		self.SetMenuBar(menuBar)  # Adding the MenuBar to the Frame content.
-		self.glcanvas = MeshViewerCanvas(self, takeScreenshots, screenshotsPrefix, rotationAngle)
+		self.glcanvas = MeshViewerCanvas(self)
 		
 		self.rightPanel = wx.BoxSizer(wx.VERTICAL)
 		
@@ -425,7 +422,7 @@ class MeshViewerFrame(wx.Frame):
 		dlg.Destroy()
 		return
 
-	def OnSaveFace(self, evt):
+	def OnSaveMesh(self, evt):
 		dlg = wx.FileDialog(self, "Choose a file", ".", "", "*", wx.SAVE)
 		if dlg.ShowModal() == wx.ID_OK:
 			filename = dlg.GetFilename()
@@ -436,6 +433,16 @@ class MeshViewerFrame(wx.Frame):
 		dlg.Destroy()
 		return
 
+	def OnSaveScreenshot(self, evt):
+		dlg = wx.FileDialog(self, "Choose a file", ".", "", "*", wx.SAVE)
+		if dlg.ShowModal() == wx.ID_OK:
+			filename = dlg.GetFilename()
+			dirname = dlg.GetDirectory()
+			filepath = os.path.join(dirname, filename)
+			saveImageGL(self.glcanvas, filepath)
+		dlg.Destroy()
+		return
+
 	def OnExit(self, evt):
 		self.Close(True)
 		return
@@ -443,23 +450,10 @@ class MeshViewerFrame(wx.Frame):
 class MeshViewer(object):
 	def __init__(self, filename = None, ts = False, sp = "", ra = 0):
 		app = wx.App()
-		frame = MeshViewerFrame(None, -1, 'MeshViewer', takeScreenshots = ts, screenshotsPrefix = sp, rotationAngle = ra)
-		if (filename):
-			frame.OnLoadAzElZDataset(filename)
+		frame = MeshViewerFrame(None, -1, 'MeshViewer')
 		frame.Show(True)
 		app.MainLoop()
 		app.Destroy()
 
 if __name__ == '__main__':
-	filename = None
-	if len(argv) > 1:
-		filename = argv[1]
-	takeScreenshots = False
-	screenshotsPrefix = ""
-	rotationAngle = 0
-	if len(argv) >= 3:
-		takeScreenshots = True
-		screenshotsPrefix = argv[2]
-	if len(argv) >= 4:
-		rotationAngle = int(argv[3])
-	viewer = MeshViewer(filename, takeScreenshots, screenshotsPrefix, rotationAngle)
+	viewer = MeshViewer()
