@@ -3,6 +3,7 @@ from Shapes3D import *
 from OpenGL.GL import *
 from Graphics3D import *
 import numpy as np
+import numpy.linalg as linalg
 
 class PointCloud(object):
 	def __init__(self):
