@@ -9,7 +9,7 @@ import numpy.linalg as linalg
 import scipy.spatial as spatial
 
 ICP_MAXITER = 100
-ICP_NPOINTSAMPLES = 150
+ICP_NPOINTSAMPLES = 1000
 
 def getRigidTransformationSVD(Points, TargetPoints):
 	P = Points.copy()
@@ -48,9 +48,11 @@ def transformPoints(T, P):
 	PTemp = PTemp.transpose()
 	return PTemp[:, 0:3]
 
+#allPermsAndFlips: Whether to test all permutations and flips of the principal axes
+#as the intial guess
 #pointToPlane: Whether or not to do point to plane ICP
 #update: Update the points to reflect the best found transformation?
-def ICP_PointsToMesh(P, M, pointToPlane = False, update = False):
+def ICP_PointsToMesh(P, M, allPermsAndFlips = False, pointToPlane = False, update = False):
 	MCentroid = M.getCentroid()
 	NM = len(M.vertices)
 	MPoints = np.zeros((NM, 3))
@@ -92,28 +94,32 @@ def ICP_PointsToMesh(P, M, pointToPlane = False, update = False):
 				for flip1 in [-1, 1]:
 					for flip2 in [-1, 1]:
 						for flip3 in [-1, 1]:
-							print "perm1, perm2, perm3 = %i, %i, %i"%(perm1, perm2, perm3)
-							print "flip1, flip2, flip3 = %i, %i, %i"%(flip1, flip2, flip3)
-							thisaxis = PAxes[:, np.array([perm1, perm2, perm3])]
-							thisaxis[:, 0] = flip1*thisaxis[:, 0]
-							thisaxis[:, 1] = flip2*thisaxis[:, 1]
-							thisaxis[:, 2] = flip3*thisaxis[:, 2]
-							#Initial Guess Transformation steps
-							#1. Translate point set so that it's centered at the origin
-							#2. Rotate point set so that it's aligned with the chosen axes
-							#3. Rotate again to align with the axes of the mesh
-							#4. Translate to center at the centroid of the mesh
-							T1 = np.eye(4)
-							T1[0:3, 3] = np.array([-PCentroid.x, -PCentroid.y, -PCentroid.z])
-							R1 = np.eye(4)
-							R1[0:3, 0:3] = thisaxis
-							R1 = R1.transpose()
-							T2 = np.eye(4)
-							T2[0:3, 3] = np.array([MCentroid.x, MCentroid.y, MCentroid.z])
-							R2 = np.eye(4)
-							R2[0:3, 0:3] = MAxes
-							#In other words, T = R2*T2*R1*T1
-							T = R2.dot( T2.dot( R1.dot( T1 ) ) )
+							#By default, T just moves their centroids together
+							T = np.eye(4)
+							T[0:3, 3] = np.array([MCentroid.x - PCentroid.x, MCentroid.y - PCentroid.y, MCentroid.z - PCentroid.z])
+							if allPermsAndFlips:
+								print "perm1, perm2, perm3 = %i, %i, %i"%(perm1, perm2, perm3)
+								print "flip1, flip2, flip3 = %i, %i, %i"%(flip1, flip2, flip3)
+								thisaxis = PAxes[:, np.array([perm1, perm2, perm3])]
+								thisaxis[:, 0] = flip1*thisaxis[:, 0]
+								thisaxis[:, 1] = flip2*thisaxis[:, 1]
+								thisaxis[:, 2] = flip3*thisaxis[:, 2]
+								#Initial Guess Transformation steps
+								#1. Translate point set so that it's centered at the origin
+								#2. Rotate point set so that it's aligned with the chosen axes
+								#3. Rotate again to align with the axes of the mesh
+								#4. Translate to center at the centroid of the mesh
+								T1 = np.eye(4)
+								T1[0:3, 3] = np.array([-PCentroid.x, -PCentroid.y, -PCentroid.z])
+								R1 = np.eye(4)
+								R1[0:3, 0:3] = thisaxis
+								R1 = R1.transpose()
+								T2 = np.eye(4)
+								T2[0:3, 3] = np.array([MCentroid.x, MCentroid.y, MCentroid.z])
+								R2 = np.eye(4)
+								R2[0:3, 0:3] = MAxes
+								#In other words, T = R2*T2*R1*T1
+								T = R2.dot( T2.dot( R1.dot( T1 ) ) )
 							converged = False
 							lastidx = np.zeros(ICP_NPOINTSAMPLES)
 							lastdists = np.zeros(ICP_NPOINTSAMPLES)
@@ -157,6 +163,18 @@ def ICP_PointsToMesh(P, M, pointToPlane = False, update = False):
 							if err < minError:
 								minError = err;
 								minIndex = len(AllTransformations) - 1
+							if not allPermsAndFlips:
+								break
+						if not allPermsAndFlips:
+							break
+					if not allPermsAndFlips:
+						break
+				if not allPermsAndFlips:
+					break
+			if not allPermsAndFlips:
+				break
+		if not allPermsAndFlips:
+			break
 	
 	T = AllTransformations[minIndex][-1]
 	print "T = %s"%T
@@ -167,7 +185,7 @@ def ICP_PointsToMesh(P, M, pointToPlane = False, update = False):
 			P.points[i] = Point3D(OrigPoints[i, 0], OrigPoints[i, 1], OrigPoints[i, 2])
 	return AllTransformations, minIndex, error
 
-def ICP_MeshToMesh(M1, M2, pointToPlane = False, update = False):
+def ICP_MeshToMesh(M1, M2, allPermsAndFlips = False, pointToPlane = False, update = False):
 	P = PointCloud()
 	for i in range(len(M1.vertices)):
 		P.points.append(M1.vertices[i].pos)
