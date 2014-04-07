@@ -122,12 +122,29 @@ class MeshViewerCanvas(glcanvas.GLCanvas):
 		self.bbox.Union(self.mesh2.getBBox())
 		self.camera.centerOnBBox(self.bbox, theta = -math.pi/2, phi = math.pi/2)
 		self.Refresh()
+		
+	def MDSMesh1(self, evt):
+		if not self.mesh1:
+			return
+		print "TODO: Finish this"
+#		mds = manifold.MDS(n_components=2, dissimilarity="precomputed", n_jobs=1)
+#		pos = mds.fit(similarities).embedding_
+		self.Refresh()
+	
+	def MDSMesh2(self, evt):
+		if not self.mesh2:
+			return
+		print "TODO: Finish this"
+#		mds = manifold.MDS(n_components=2, dissimilarity="precomputed", n_jobs=1)
+#		pos = mds.fit(similarities).embedding_
+		self.Refresh()	
 	
 	def doICP(self, evt):
 		if self.mesh1 and self.mesh2:
 			AllTransformations, minIndex, error = ICP_MeshToMesh(self.mesh1, self.mesh2)
 			self.transformations = AllTransformations[minIndex]
 			self.savingMovie = True
+			self.movieIter = 0
 		else:
 			print "ERROR: One or both meshes have not been loaded yet"
 		self.Refresh()
@@ -218,7 +235,9 @@ class MeshViewerCanvas(glcanvas.GLCanvas):
 				#Convert the frames to an OGG video and delete the PNG images
 				#system(sprintf('ffmpeg -f image2 -r 4 -i %s%s.tif -r 30 %s.mp4', moviename, '%d', moviename));
 				#subprocess.call(["ffmpeg", "-f", "image2" "-r", "2", "-i", "ICP%d.png", "-r", "2", "ICP.ogg"])
-				os.popen3("ffmpeg -f image2 -r 4 -i ICP%d.png -r 4 ICP.ogg")
+				(stdin, stdout, stderr) = os.popen3("ffmpeg -f image2 -r 4 -i ICP%d.png -r 4 ICP.ogg")
+				print stdout.readlines()
+				print stderr.readlines()
 				os.popen3("rm ICP*.png")
 			self.Refresh()
 	
@@ -324,6 +343,17 @@ class MeshViewerFrame(wx.Frame):
 		self.displayMeshVerticesCheckbox.SetValue(False)
 		self.Bind(wx.EVT_CHECKBOX, self.glcanvas.displayMeshVerticesCheckbox, self.displayMeshVerticesCheckbox)
 		self.rightPanel.Add(self.displayMeshVerticesCheckbox)
+		
+		#Buttons for MDS
+		MDSPanel = wx.BoxSizer(wx.HORIZONTAL)
+		MDS1Button = wx.Button(self, -1, "MDS Mesh1")
+		self.Bind(wx.EVT_BUTTON, self.glcanvas.MDSMesh1, MDS1Button)
+		viewPanel.Add(MDS1Button, 0, wx.EXPAND)
+		MDS2Button = wx.Button(self, -1, "MDS Mesh2")
+		self.Bind(wx.EVT_BUTTON, self.glcanvas.MDSMesh2, MDS2Button)
+		viewPanel.Add(MDS2Button, 0, wx.EXPAND)
+		self.rightPanel.Add(wx.StaticText(self, label="MDS on Meshes"), 0, wx.EXPAND)
+		self.rightPanel.Add(MDSPanel, 0, wx.EXPAND)		
 		
 		#Button for doing ICP
 		ICPButton = wx.Button(self, -1, "Iterative Closest Points")

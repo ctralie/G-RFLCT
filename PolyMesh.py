@@ -119,7 +119,7 @@ class MeshFace(object):
 			ret = ret*(1.0/float(len(verts)))
 			self.centroid = ret
 		return self.centroid
-	
+
 	def drawFilled(self, drawNormal = True):
 		glBegin(GL_POLYGON)
 		verts = self.getVertices()
@@ -146,6 +146,10 @@ class MeshFace(object):
 	
 	def getPlane(self):
 		return Plane3D(self.startV.pos, self.getNormal())
+
+	#Return the closest point inside this face to P
+	def getClosestPoint(self, P):
+		return getClosestPoint([v.pos for v in self.getVertices()], P)			
 
 class MeshEdge(object):
 	def __init__(self, v1, v2, ID):
@@ -1035,6 +1039,7 @@ class PolyMesh(object):
 					P = v.pos
 					glVertex3f(P.x, P.y, P.z)
 				glEnd()
+			glEnable(GL_LIGHTING)
 			glEndList()
 			self.needsDisplayUpdate = False
 		glCallList(self.DisplayList)

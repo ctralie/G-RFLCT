@@ -9,7 +9,7 @@ import numpy.linalg as linalg
 import scipy.spatial as spatial
 
 ICP_MAXITER = 100
-ICP_NPOINTSAMPLES = 100
+ICP_NPOINTSAMPLES = 150
 
 def getRigidTransformationSVD(Points, TargetPoints):
 	P = Points.copy()
@@ -48,8 +48,9 @@ def transformPoints(T, P):
 	PTemp = PTemp.transpose()
 	return PTemp[:, 0:3]
 
+#pointToPlane: Whether or not to do point to plane ICP
 #update: Update the points to reflect the best found transformation?
-def ICP_PointsToMesh(P, M, update = False):
+def ICP_PointsToMesh(P, M, pointToPlane = False, update = False):
 	MCentroid = M.getCentroid()
 	NM = len(M.vertices)
 	MPoints = np.zeros((NM, 3))
@@ -80,9 +81,6 @@ def ICP_PointsToMesh(P, M, update = False):
 	AllTransformations = []
 	minError = np.infty
 	minIndex = 0 #Index of the best permuation/flip
-	
-	[flip1, flip2, flip3] = [1, 1, 1]
-
 		
 	for perm1 in range(3):
 		for perm2 in range(3):
@@ -118,6 +116,7 @@ def ICP_PointsToMesh(P, M, update = False):
 							T = R2.dot( T2.dot( R1.dot( T1 ) ) )
 							converged = False
 							lastidx = np.zeros(ICP_NPOINTSAMPLES)
+							lastdists = np.zeros(ICP_NPOINTSAMPLES)
 							#Find closest points and re-align until the closest points
 							#do not change
 							transformations = []
@@ -127,12 +126,27 @@ def ICP_PointsToMesh(P, M, update = False):
 								PPointsThis = transformPoints(T, PPoints)
 								dists, idx = MKDTree.query(PPointsThis)
 								MPointsThis = MPoints[idx, :]
-								#TODO: Use this to do point to plane ICP getting closest
-								#points on supporting planes
-								diffFromLast = np.abs(idx - lastidx)
-								if diffFromLast.sum() == 0:
-									converged = True
+								if pointToPlane:
+									#Find the closest point on the faces attached
+									#to the closest vertex found
+									for i in range(len(idx)):
+										thisPoint = Point3D(PPointsThis[i, 0], PPointsThis[i, 1], PPointsThis[i, 2])
+										faces = M.vertices[idx[i]].getAttachedFaces()
+										minDist = np.inf
+										closestPoint = M.vertices[idx[i]].pos
+										for f in faces:
+											thisClosestP = f.getClosestPoint(thisPoint)
+											distSqr = (thisClosestP - thisPoint).squaredMag()
+											if distSqr < minDist:
+												minDist = distSqr
+												closestPoint = thisClosestP
+										MPointsThis[i, :] = np.array([closestPoint.x, closestPoint.y, closestPoint.z])							
+								else:
+									diffFromLast = np.abs(idx - lastidx)
+									if diffFromLast.sum() == 0:
+										converged = True
 								lastidx = idx
+								lastdists = dists
 								T = getRigidTransformationSVD(PPoints, MPointsThis)
 								numIter = numIter + 1
 								print ".",
@@ -153,12 +167,12 @@ def ICP_PointsToMesh(P, M, update = False):
 			P.points[i] = Point3D(OrigPoints[i, 0], OrigPoints[i, 1], OrigPoints[i, 2])
 	return AllTransformations, minIndex, error
 
-def ICP_MeshToMesh(M1, M2, update = False):
+def ICP_MeshToMesh(M1, M2, pointToPlane = False, update = False):
 	P = PointCloud()
 	for i in range(len(M1.vertices)):
 		P.points.append(M1.vertices[i].pos)
 		P.colors.append([1, 0, 0])
-	AllTransformations, minIndex, error = ICP_PointsToMesh(P, M2, update)
+	AllTransformations, minIndex, error = ICP_PointsToMesh(P, M2, pointToPlane, update)
 	for i in range(len(M1.vertices)):
 		M1.vertices[i].pos = P.points[i]
 	return AllTransformations, minIndex, error

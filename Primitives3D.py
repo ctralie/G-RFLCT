@@ -4,6 +4,8 @@ EPS_AREPLANAR = 1e-5
 M_PI = 3.1415925
 import math
 from numpy import matrix
+import numpy as np
+import numpy.linalg as linalg
 
 #############################################################
 ####                 PRIMITIVE CLASSES                  #####
@@ -509,6 +511,60 @@ def getPolygonArea(verts):
 def getTriangleArea(A, B, C):
 	return getPolygonArea([A, B, C])
 
+#Get the closest point on the face represented by Vs to P
+def getClosestPoint(Vs, P):
+	if len(Vs) < 3:
+		return
+	N = getFaceNormal(Vs)
+	dV = P - Vs[0]
+	#First find the closest point on the plane to this point
+	PPlane = Vs[0] + N.projPerp(P)
+	#Now check to see if PPlane is on the interior of the polygon
+	ccws = np.zeros((len(Vs), 1))
+	for i in range(len(Vs)):
+		A = Vs[i]
+		B = Vs[(i+1)%len(Vs)]
+		v1 = PPlane - A
+		v2 = PPlane - B
+		M = np.ones((3, 3))
+		M[1, :] = np.array([v1.x, v1.y, v1.z])
+		M[2, :] = np.array([v2.x, v2.y, v2.z])
+		ccw = linalg.det(M)
+		if ccw < 0:
+			ccws[i] = -1
+		elif ccw > 0:
+			ccws[i] = 1
+		else:
+			ccws[i] = 0
+	if abs(sum(ccws)) == (ccws != 0).sum():
+		return PPlane
+	#Otherwise, the point is on the outside of the polygon
+	#Check every edge to find the closest point
+	minDist = np.inf
+	ret = PPlane
+	for i in range(len(Vs)):
+		A = Vs[i]
+		B = Vs[(i+1)%len(Vs)]
+		dL = B - A
+		dL.normalize()
+		dP = PPlane - A
+		PProjRel = dL.proj(dP)
+		PClosest = PProjRel + A
+		t = PProjRel.Dot(dL) #Parameter representing where the point is
+		#in the interior of the segment AB
+		#If the projected point is to the left of A, A is the closest
+		if t < 0:
+			PClosest = A
+		#If the projected point is to the right of B, B is the closest
+		elif t > 1:
+			PClosest = B
+		#Otherwise it is in the interior
+		distSqr = (P - PClosest).squaredMag()
+		if distSqr < minDist:
+			minDist = distSqr
+			ret = PClosest
+	return ret
+
 #Return the cosine of the angle between P1 and P2 with respect
 #to "Vertex" as their common, shared vertex
 def COSBetween(Vertex, P1, P2):
@@ -533,6 +589,11 @@ def printPointsList(L, name):
 			print "]"
 
 if __name__ == '__main__':
+	Vs = [Point3D(0, 0, 0), Point3D(1, 0, 0), Point3D(0, 1, 0)]
+	P = Point3D(0.5, 0.6, 2)
+	print getClosestPoint(Vs, P)
+
+if __name__ == '__main__3':
 	m = Matrix4([0, 1, 0, 0, 0, 0, 1, 2, 1, 0, 0, 0, 0, 0, 0, 1])
 	print m
 	print m.Inverse()
