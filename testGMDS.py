@@ -20,7 +20,8 @@ import os
 import subprocess
 import math
 import time
-from sklearn import manifold
+#from sklearn import manifold
+from GMDS import *
 
 DEFAULT_SIZE = wx.Size(1200, 800)
 DEFAULT_POS = wx.Point(10, 10)
@@ -73,6 +74,7 @@ class MeshViewerCanvas(glcanvas.GLCanvas):
 		self.mesh2 = None
 		self.mesh2DistLoaded = False
 		self.mesh2Dist = None
+		self.mesh3 = None
 		#Holds the transformations of the best iteration in ICP
 		self.transformations = []
 		self.savingMovie = False
@@ -162,7 +164,10 @@ class MeshViewerCanvas(glcanvas.GLCanvas):
 	
 	def doGMDS(self, evt):
 		if self.mesh1 and self.mesh2:
-			print "TODO"
+			AllTransformations, minIndex, error = ICP_MeshToMesh(self.mesh1, self.mesh2, False, False, False)
+			self.transformations = AllTransformations[minIndex]
+			self.savingMovie = True
+			self.movieIter = 0
 		else:
 			print "ERROR: One or both meshes have not been loaded yet"
 		self.Refresh()
@@ -234,29 +239,47 @@ class MeshViewerCanvas(glcanvas.GLCanvas):
 		transform = np.eye(4)
 		if len(self.transformations) > 0:
 			transform = self.transformations[-1]
-		if self.savingMovie:
-			transform = self.transformations[self.movieIter]
-			self.movieIter = self.movieIter + 1
-		if self.mesh1:
-			glPushMatrix()
-			glMultMatrixd(transform.transpose().flatten())
-			self.mesh1.renderGL(self.displayMeshEdges, self.displayMeshVertices, self.displayMeshNormals, self.displayMeshFaces, None)
-			glPopMatrix()
-		if self.mesh2:
-			self.mesh2.renderGL(self.displayMeshEdges, self.displayMeshVertices, self.displayMeshNormals, self.displayMeshFaces, None)
+		if self.savingMovie and self.movieIter >= 0 and len(self.transformations) > 0:
+			if self.movieIter < len(self.transformations):
+				transform = self.transformations[self.movieIter]
+		if self.mesh3:
+			self.mesh3.renderGL(self.displayMeshEdges, self.displayMeshVertices, self.displayMeshNormals, self.displayMeshFaces, None)
+		else :			
+			if self.mesh1:
+				glPushMatrix()
+				glMultMatrixd(transform.transpose().flatten())
+				self.mesh1.renderGL(self.displayMeshEdges, self.displayMeshVertices, self.displayMeshNormals, self.displayMeshFaces, None)
+				glPopMatrix()
+			if self.mesh2:
+				self.mesh2.renderGL(self.displayMeshEdges, self.displayMeshVertices, self.displayMeshNormals, self.displayMeshFaces, None)
 		self.SwapBuffers()
 		
 		if self.savingMovie:
-			saveImageGL(self, "ICP%i.png"%self.movieIter)
-			if self.movieIter >= len(self.transformations):
-				self.savingMovie = False
-				#Convert the frames to an OGG video and delete the PNG images
-				#system(sprintf('ffmpeg -f image2 -r 4 -i %s%s.tif -r 30 %s.mp4', moviename, '%d', moviename));
-				#subprocess.call(["ffmpeg", "-f", "image2" "-r", "2", "-i", "ICP%d.png", "-r", "2", "ICP.ogg"])
-				(stdin, stdout, stderr) = os.popen3("ffmpeg -f image2 -r 4 -i ICP%d.png -r 4 ICP.ogg")
-				print stdout.readlines()
-				print stderr.readlines()
-				os.popen3("rm ICP*.png")
+			if self.movieIter == -1:
+				if self.mesh1 and self.mesh2:
+					print "Doing ICP"
+					AllTransformations, minIndex, error = ICP_MeshToMesh(self.mesh1, self.mesh2)
+					print "Finished ICP"
+					self.transformations = AllTransformations[minIndex]
+					self.centerOnMesh2(None)
+			else:
+				#saveImageGL(self, "GMDS%i.png"%self.movieIter)
+				if self.movieIter >= len(self.transformations):
+					self.savingMovie = False
+					#Now transplant the colors onto the target mesh
+					VX = np.zeros((len(self.mesh1.vertices), 3))
+					CX = np.zeros((len(self.mesh1.vertices), 3))
+					for i in range(0, len(self.mesh1.vertices)):
+						P = self.mesh1.vertices[i].pos
+						C = self.mesh1.vertices[i].color
+						VX[i, :] = np.array([P.x, P.y, P.z])
+						CX[i, :] = C
+					VX = transformPoints(self.transformations[-1], VX)
+					print "Getting initial guess of point positions..."
+					ts, us = getInitialGuess2DProjection(VX, self.mesh2)
+					print "Finished initial guess of point positions"
+					self.mesh3 = transplantColorsLaplacian(self.mesh2, CX, ts, us)
+			self.movieIter = self.movieIter + 1
 			self.Refresh()
 	
 	def initGL(self):		
@@ -306,7 +329,7 @@ class MeshViewerCanvas(glcanvas.GLCanvas):
 class MeshViewerFrame(wx.Frame):
 	(ID_LOADDATASET1, ID_LOADDATASET2, ID_SAVEDATASET, ID_SAVESCREENSHOT) = (1, 2, 3, 4)
 	
-	def __init__(self, parent, id, title, pos=DEFAULT_POS, size=DEFAULT_SIZE, style=wx.DEFAULT_FRAME_STYLE, name = 'GLWindow'):
+	def __init__(self, parent, id, title, pos=DEFAULT_POS, size=DEFAULT_SIZE, style=wx.DEFAULT_FRAME_STYLE, name = 'GLWindow', mesh1 = None, mesh2 = None):
 		style = style | wx.NO_FULL_REPAINT_ON_RESIZE
 		super(MeshViewerFrame, self).__init__(parent, id, title, pos, size, style, name)
 		#Initialize the menu
@@ -331,6 +354,11 @@ class MeshViewerFrame(wx.Frame):
 		menuBar.Append(filemenu,"&File") # Adding the "filemenu" to the MenuBar
 		self.SetMenuBar(menuBar)  # Adding the MenuBar to the Frame content.
 		self.glcanvas = MeshViewerCanvas(self)
+		self.glcanvas.mesh1 = mesh1
+		self.glcanvas.mesh2 = mesh2
+		if mesh1 and mesh2:
+			self.glcanvas.savingMovie = True
+			self.glcanvas.movieIter = -1
 		
 		self.rightPanel = wx.BoxSizer(wx.VERTICAL)
 		
@@ -457,12 +485,19 @@ class MeshViewerFrame(wx.Frame):
 		return
 
 class MeshViewer(object):
-	def __init__(self, filename = None, ts = False, sp = "", ra = 0):
+	def __init__(self, m1 = None, m2 = None):
 		app = wx.App()
-		frame = MeshViewerFrame(None, -1, 'MeshViewer')
+		frame = MeshViewerFrame(None, -1, 'MeshViewer', mesh1 = m1, mesh2 = m2)
 		frame.Show(True)
 		app.MainLoop()
 		app.Destroy()
 
 if __name__ == '__main__':
-	viewer = MeshViewer()
+	m1 = None
+	m2 = None
+	if len(argv) >= 3:
+		m1 = LaplacianMesh()
+		m1.loadFile(argv[1])
+		m2 = LaplacianMesh()
+		m2.loadFile(argv[2])
+	viewer = MeshViewer(m1, m2)

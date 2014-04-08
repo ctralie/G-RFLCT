@@ -7,6 +7,7 @@
 from Primitives3D import *
 import numpy as np
 import numpy.linalg as linalg
+import matplotlib.pyplot as plt
 
 #This helper function is used to print 2D polygons
 #as parallel lists of x and y coordinates
@@ -232,15 +233,21 @@ def pointInsideConvexPolygon2D(poly, P, CLOSENESS_EPS = EPS):
 
 #Get the barycentric coordinates of X inside of the triangle ABC on the plane
 #(Z coordinate is ignored)
-def getBarycentridCoords(A, B, C, X):
+def getBarycentricCoords(A, B, C, X):
 	T = np.array( [ [A.x - C.x, B.x - C.x ], [A.y - C.y, B.y - C.y] ] )
 	y = np.array( [ [X.x - C.x], [X.y - C.y] ] )
 	lambdas = linalg.solve(T, y)
 	lambdas = lambdas.flatten()
 	lambdas = np.append(lambdas, 1 - (lambdas[0] + lambdas[1]))
+	if (lambdas[0] < 0 or lambdas[1] < 0 or lambdas[2] < 0):
+		print "ERROR: Not a convex combination; lambda = %s"%lambdas
+		print "pointInsideConvexPolygon2D = %s"%pointInsideConvexPolygon2D([A, B, C], X, 0)
+		plt.plot([A.x, B.x, C.x, A.x], [A.y, B.y, C.y, A.y], 'r')
+		plt.hold(True)
+		plt.plot([X.x], [X.y], 'b.')
+		plt.show()
 	assert (lambdas[0] >= 0 and lambdas[1] >= 0 and lambdas[2] >= 0)
 	return lambdas
-	
 
 if __name__ ==  '__main__':
 	Points1 = [ Point3D(151.747, 90.6552, 0) , Point3D(151.747, 50, 0) , Point3D(50, 50, 0) , Point3D(85.9002, 136.766, 0) , Point3D(116.439, 136.766, 0) ]

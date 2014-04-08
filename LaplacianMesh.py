@@ -9,6 +9,8 @@ import math
 import numpy as np
 from scipy import sparse
 from scipy.sparse.linalg import lsqr
+from scipy.spatial import Delaunay
+import matplotlib.pyplot as plt
 
 #Note: This class assumes mesh is triangular
 #(use e.g. PolyMesh.starTriangulate() if this is not the case)
@@ -20,13 +22,17 @@ def getCotangent(v1, v2, v3):
 	dV1 = P1 - P3
 	dV2 = P2 - P3
 	cosAngle = dV1.Dot(dV2)/(dV1.Length()*dV2.Length())
+	if cosAngle**2 >= 0.99:
+		return 10
 	sinAngle = math.sqrt(1 - cosAngle**2)
+	if sinAngle == 0:
+		return 10
 	return cosAngle/sinAngle
 
 class LaplacianMesh(PolyMesh):
 	#Return the sparse NxN upper part of the matrix representing the
 	#Laplacian constraints, in the sparse coordinate format
-	def getLaplacianSparseMatrixCoords(self):
+	def getLaplacianSparseMatrixCoords(self, useCotangentWeights = True):
 		I = []
 		J = []
 		V = []
@@ -44,18 +50,22 @@ class LaplacianMesh(PolyMesh):
 					Vs.remove(v1)
 					Vs.remove(v2)
 					if len(Vs) < 1:
-						print "Warning: Face with only 2 vertices encountered"
+						print "LaplacianMesh Warning: Face with only 2 vertices encountered"
 					v3 = Vs[0]
-					cotAlpha = getCotangent(v1, v2, v3)
+					if useCotangentWeights:
+						cotAlpha = getCotangent(v1, v2, v3)
 				if e.f2:
 					Vs = e.f2.getVertices()
 					Vs.remove(v1)
 					Vs.remove(v2)
 					if len(Vs) < 1:
-						print "Warning: Face with only 2 vertices encountered"
+						print "LaplacianMesh Warning: Face with only 2 vertices encountered"
 					v3 = Vs[0]
-					cotBeta = getCotangent(v1, v2, v3)
-				wij = 0.5*(cotAlpha + cotBeta)
+					if useCotangentWeights:
+						cotBeta = getCotangent(v1, v2, v3)
+				wij = 1
+				if useCotangentWeights:
+					wij = 0.5*(cotAlpha + cotBeta)
 				totalWeight = totalWeight + wij
 				I.append(i)
 				J.append(j)
@@ -71,8 +81,12 @@ class LaplacianMesh(PolyMesh):
 	#deltaCoords: NxY numpy array, where Y is the dimension
 	#g: MxY numpy array representing values of the constraints, where Y is the dimension
 	#and M is the number of constraints
-	def solveFunctionWithConstraints(self, constraints, deltaCoords, g):
-		(I, J, V) = self.getLaplacianSparseMatrixCoords()
+	#useCotangentWeights: Use the cotangent weights (umbrella weights used if false)
+	#overWriteRows: True if the constraints are supposed to replace the corresponding
+	#rows of the matrix instead of being appended to the matrix
+	def solveFunctionWithConstraints(self, constraints, deltaCoords, g, useCotangentWeights = True, overWriteRows = False):
+		#TODO: Implement overwriteRows
+		(I, J, V) = self.getLaplacianSparseMatrixCoords(useCotangentWeights)
 		NVerts = len(self.vertices)
 		NConstraints = g.shape[0]
 		Y = g.shape[1]
@@ -123,7 +137,90 @@ class LaplacianMesh(PolyMesh):
 	#anchoredVertices: array of the form [(index, Position)]
 	def createMembraneSurface(self, anchoredVertices):
 		print "TODO"
-			
+
+#An application of Laplacian meshes for blending color smoothly across a mesh
+#TargetMesh: The target mesh
+#CX: an array of colors for the transplanted point set
+#tx: Indices of the triangles in "TargetMesh" where each of the points in X falls
+#ux: Barycentric coordinates of each point
+def transplantColorsLaplacian(TargetMesh, CX, tx, ux):
+	NX = CX.shape[0]
+	#Create a new mesh that will hold the result of the color transplant
+	NewMesh = LaplacianMesh()
+	#Step 1: Find all of the vertices that are contained within the same
+	#triangle, and sub-triangulate that triangle
+	
+	#Add the original vertices of the mesh
+	for v in TargetMesh.vertices:
+		NewMesh.addVertex(v.pos)
+	#Add the vertices of the transplanted mesh that fall inside
+	#different triangles
+	tris = []
+	for i in range(len(TargetMesh.faces)):
+		tris.append([])
+	for i in range(len(tx)):
+		triIndex = int(tx[i].flatten()[0])
+		triVertices = [v.pos for v in TargetMesh.faces[triIndex].getVertices()]
+		newPos = Point3D(0, 0, 0)
+		for k in range(len(triVertices)):
+			newPos = newPos + ux[i, k]*triVertices[k]
+		newVertex = NewMesh.addVertex(newPos, [CX[i, 0], CX[i, 1], CX[i, 2]])
+		#Store along the color with this new vertex
+		tris[triIndex].append(newVertex)
+	for i in range(1, len(tris)):
+		#Get the vertices in the new mesh corresponding to this triangle
+		vertices = [NewMesh.vertices[v.ID] for v in TargetMesh.faces[i].getVertices()]
+		if len(tris[i]) > 0:
+			#Sub-triangulate the triangle where points fell
+			Vs = vertices + tris[i]
+			Ps = [v.pos for v in Vs]
+			#Transform the Ps into an orthogonal planar coordinate system
+			#to set it up for the Delaunay triangulation
+			Axis1 = Ps[1] - Ps[0]
+			Axis2 = Ps[2] - Ps[0]
+			Axis2 = Axis1.projPerp(Axis2)
+			Axis1.normalize()
+			Axis2.normalize()
+			PsMat = np.zeros((len(Ps), 2))
+			for k in range(len(Ps)):
+				dP = Ps[k] - Ps[0]
+				x = Axis1.proj(dP).Length()
+				y = Axis2.proj(dP).Length()
+				PsMat[k, 0] = x
+				PsMat[k, 1] = y
+			#Do the Delaunay triangulation and add the faces
+			tri = Delaunay(PsMat)
+			for k in range(tri.vertices.shape[0]):
+				newFace = [Vs[j] for j in tri.vertices[k, :]]
+				NewMesh.addFace(newFace)
+		else:
+			#For every face that wasn't added, be sure to put the
+			#original triangles back
+			NewMesh.addFace(vertices)
+					
+	#Step 2: Setup the laplacian constraints and solve the system
+	print "Solving Laplacian Mesh system for colors..."
+	constraints = []
+	coloredVertices = []
+	for v in NewMesh.vertices:
+		if v.color:
+			coloredVertices.append(v)
+			constraints.append([(v.ID, 1)])
+	g = np.zeros((len(coloredVertices), 3))
+	for i in range(0, len(coloredVertices)):
+		g[i, :] = np.array(coloredVertices[i].color)
+	deltaCoords = np.zeros((len(NewMesh.vertices), 3))
+	CY = NewMesh.solveFunctionWithConstraints(constraints, deltaCoords, g)
+	#Make sure colors don't go above 1
+	CY[CY > 1] = 1
+	CY = CY/CY.max()
+	#Copy colors over
+	for i in range(0, CY.shape[0]):
+		C = CY[i, :]
+		NewMesh.vertices[i].color = [C[0], C[1], C[2]] 
+	print "Finished Laplacian Mesh system..."
+	print CY
+	return NewMesh
 
 if __name__ == '__main__':
 	mesh1 = getBoxMesh()

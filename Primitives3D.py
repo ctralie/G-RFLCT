@@ -1,5 +1,5 @@
 #TODO: Make fix EPS weirdness
-EPS = 1e-7
+EPS = 1e-12
 EPS_AREPLANAR = 1e-5
 M_PI = 3.1415925
 import math
