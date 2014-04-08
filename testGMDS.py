@@ -242,9 +242,28 @@ class MeshViewerCanvas(glcanvas.GLCanvas):
 		if self.savingMovie and self.movieIter >= 0 and len(self.transformations) > 0:
 			if self.movieIter < len(self.transformations):
 				transform = self.transformations[self.movieIter]
-		if self.mesh3:
-			self.mesh3.renderGL(self.displayMeshEdges, self.displayMeshVertices, self.displayMeshNormals, self.displayMeshFaces, None)
-		else :			
+		
+		if self.savingMovie and self.movieIter >= len(self.transformations):
+			if self.movieIter < len(self.transformations) + 15:
+				if self.mesh3:
+					self.mesh3.renderGL(self.displayMeshEdges, self.displayMeshVertices, self.displayMeshNormals, self.displayMeshFaces, None)
+			elif self.movieIter < len(self.transformations) + 30:
+				self.mesh2.renderGL(self.displayMeshEdges, self.displayMeshVertices, self.displayMeshNormals, self.displayMeshFaces, None)
+			elif self.movieIter < len(self.transformations) + 45:
+				if self.mesh3:
+					self.mesh3.renderGL(self.displayMeshEdges, self.displayMeshVertices, self.displayMeshNormals, self.displayMeshFaces, None)
+			elif self.movieIter < len(self.transformations) + 60:
+				self.mesh2.renderGL(self.displayMeshEdges, self.displayMeshVertices, self.displayMeshNormals, self.displayMeshFaces, None)
+			elif self.movieIter < len(self.transformations) + 75:
+				if self.mesh3:
+					self.mesh3.renderGL(self.displayMeshEdges, self.displayMeshVertices, self.displayMeshNormals, self.displayMeshFaces, None)
+			else:
+				self.savingMovie = False
+				os.popen3("ffmpeg -f image2 -r 4 -i GMDS%d.png -r 4 GMDS.ogg")
+			saveImageGL(self, "GMDS%i.png"%self.movieIter)	
+			self.movieIter = self.movieIter + 1
+
+		if self.movieIter < len(self.transformations):
 			if self.mesh1:
 				glPushMatrix()
 				glMultMatrixd(transform.transpose().flatten())
@@ -263,9 +282,8 @@ class MeshViewerCanvas(glcanvas.GLCanvas):
 					self.transformations = AllTransformations[minIndex]
 					self.centerOnMesh2(None)
 			else:
-				#saveImageGL(self, "GMDS%i.png"%self.movieIter)
-				if self.movieIter >= len(self.transformations):
-					self.savingMovie = False
+				saveImageGL(self, "GMDS%i.png"%self.movieIter)
+				if self.movieIter >= len(self.transformations) and not self.mesh3:
 					#Now transplant the colors onto the target mesh
 					VX = np.zeros((len(self.mesh1.vertices), 3))
 					CX = np.zeros((len(self.mesh1.vertices), 3))
@@ -278,7 +296,7 @@ class MeshViewerCanvas(glcanvas.GLCanvas):
 					print "Getting initial guess of point positions..."
 					ts, us = getInitialGuess2DProjection(VX, self.mesh2)
 					print "Finished initial guess of point positions"
-					self.mesh3 = transplantColorsLaplacian(self.mesh2, CX, ts, us)
+					self.mesh3 = transplantColorsLaplacianUsingDelaunay(self.mesh2, CX, ts, us)
 			self.movieIter = self.movieIter + 1
 			self.Refresh()
 	

@@ -138,12 +138,54 @@ class LaplacianMesh(PolyMesh):
 	def createMembraneSurface(self, anchoredVertices):
 		print "TODO"
 
+
+
 #An application of Laplacian meshes for blending color smoothly across a mesh
 #TargetMesh: The target mesh
 #CX: an array of colors for the transplanted point set
 #tx: Indices of the triangles in "TargetMesh" where each of the points in X falls
 #ux: Barycentric coordinates of each point
-def transplantColorsLaplacian(TargetMesh, CX, tx, ux):
+def transplantColorsLaplacianUsingBarycentric(TargetMesh, CX, tx, ux):
+	NX = CX.shape[0]
+	#Create a new mesh that will hold the result of the color transplant
+	NewMesh = LaplacianMesh()
+	#Step 1: Find all of the vertices that are contained within the same
+	#triangle, and sub-triangulate that triangle
+	
+	#Add the original vertices of the mesh
+	for v in TargetMesh.vertices:
+		NewMesh.addVertex(v.pos)
+					
+	#Step 2: Setup the laplacian constraints and solve the system
+	print "Solving Laplacian Mesh system for colors..."
+	constraints = []
+	coloredVertices = []
+	for v in NewMesh.vertices:
+		if v.color:
+			coloredVertices.append(v)
+			constraints.append([(v.ID, 1)])
+	g = np.zeros((len(coloredVertices), 3))
+	for i in range(0, len(coloredVertices)):
+		g[i, :] = np.array(coloredVertices[i].color)
+	deltaCoords = np.zeros((len(NewMesh.vertices), 3))
+	CY = NewMesh.solveFunctionWithConstraints(constraints, deltaCoords, g)
+	#Make sure colors don't go above 1
+	CY[CY > 1] = 1
+	CY = CY/CY.max()
+	#Copy colors over
+	for i in range(0, CY.shape[0]):
+		C = CY[i, :]
+		NewMesh.vertices[i].color = [C[0], C[1], C[2]] 
+	print "Finished Laplacian Mesh system..."
+	print CY
+	return NewMesh
+
+#An application of Laplacian meshes for blending color smoothly across a mesh
+#TargetMesh: The target mesh
+#CX: an array of colors for the transplanted point set
+#tx: Indices of the triangles in "TargetMesh" where each of the points in X falls
+#ux: Barycentric coordinates of each point
+def transplantColorsLaplacianUsingDelaunay(TargetMesh, CX, tx, ux):
 	NX = CX.shape[0]
 	#Create a new mesh that will hold the result of the color transplant
 	NewMesh = LaplacianMesh()

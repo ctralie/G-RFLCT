@@ -235,10 +235,10 @@ class MeshViewerCanvas(glcanvas.GLCanvas):
 				#Convert the frames to an OGG video and delete the PNG images
 				#system(sprintf('ffmpeg -f image2 -r 4 -i %s%s.tif -r 30 %s.mp4', moviename, '%d', moviename));
 				#subprocess.call(["ffmpeg", "-f", "image2" "-r", "2", "-i", "ICP%d.png", "-r", "2", "ICP.ogg"])
-				(stdin, stdout, stderr) = os.popen3("ffmpeg -f image2 -r 4 -i ICP%d.png -r 4 ICP.ogg")
-				print stdout.readlines()
-				print stderr.readlines()
-				os.popen3("rm ICP*.png")
+				#(stdin, stdout, stderr) = os.popen3("ffmpeg -f image2 -r 4 -i ICP%d.png -r 4 ICP.ogg")
+				#print stdout.readlines()
+				#print stderr.readlines()
+				#os.popen3("rm ICP*.png")
 			self.Refresh()
 	
 	def initGL(self):		
