@@ -816,6 +816,7 @@ class PolyMesh(object):
 		lineCount = 0
 		face = 0
 		vertex = 0
+		divideColor = False
 		for line in fin:
 			lineCount = lineCount+1
 			fields = line.split() #Splits whitespace by default
@@ -825,10 +826,12 @@ class PolyMesh(object):
 				continue
 			#Check section
 			if nVertices == 0:
-				if fields[0] == "OFF":
+				if fields[0] == "OFF" or fields[0] == "COFF":
 					if len(fields) > 2:
 						fields[1:4] = [int(field) for field in fields]
-						[nVertices, nFaces, nEdges] = fields[1:4]
+						[nVertices, nFaces, nEdges] = fields[1:4]		
+					if fields[0] == "COFF":
+						divideColor = True			
 				else:
 					fields[0:3] = [int(field) for field in fields]
 					[nVertices, nFaces, nEdges] = fields[0:3]
@@ -838,7 +841,10 @@ class PolyMesh(object):
 				color = None
 				if len(fields) >= 6:
 					#There is color information
-					color = [float(c) for c in fields[3:6]]
+					if divideColor:
+						color = [float(c)/255.0 for c in fields[3:6]]
+					else:
+						color = [float(c) for c in fields[3:6]]
 				self.addVertex(P, color)
 				vertex = vertex+1
 			elif face < nFaces:

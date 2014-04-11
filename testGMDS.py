@@ -296,7 +296,7 @@ class MeshViewerCanvas(glcanvas.GLCanvas):
 					print "Getting initial guess of point positions..."
 					ts, us = getInitialGuess2DProjection(VX, self.mesh2)
 					print "Finished initial guess of point positions"
-					self.mesh3 = transplantColorsLaplacianUsingDelaunay(self.mesh2, CX, ts, us)
+					self.mesh3 = transplantColorsLaplacianUsingBarycentric(self.mesh2, CX, ts, us)
 			self.movieIter = self.movieIter + 1
 			self.Refresh()
 	

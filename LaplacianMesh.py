@@ -8,7 +8,7 @@ import re
 import math
 import numpy as np
 from scipy import sparse
-from scipy.sparse.linalg import lsqr
+from scipy.sparse.linalg import lsqr, cg
 from scipy.spatial import Delaunay
 import matplotlib.pyplot as plt
 
@@ -32,12 +32,25 @@ def getCotangent(v1, v2, v3):
 class LaplacianMesh(PolyMesh):
 	#Return the sparse NxN upper part of the matrix representing the
 	#Laplacian constraints, in the sparse coordinate format
-	def getLaplacianSparseMatrixCoords(self, useCotangentWeights = True):
+	def getLaplacianSparseMatrixCoords(self, overwriteRows = None, useCotangentWeights = True):
 		I = []
 		J = []
 		V = []
+		overwriteIdx = 0
 		for v1 in self.vertices:
 			i = v1.ID
+			if overwriteRows:
+				if overwriteIdx < len(overwriteRows):
+					if i == overwriteRows[overwriteIdx]:
+						#If this is a row that's supposed to be overwritten
+						#then overwrite it with the relevant value
+						(j, v) = overwriteRows[overwriteIdx]
+						I.append(i)
+						J.append(j)
+						V.append(v)
+						overwriteIdx = overwriteIdx+1
+						continue
+			#Otherwise, put on laplacian constraints
 			totalWeight = 0.0
 			for e in v1.edges:
 				v2 = e.vertexAcross(v1)
@@ -81,12 +94,12 @@ class LaplacianMesh(PolyMesh):
 	#deltaCoords: NxY numpy array, where Y is the dimension
 	#g: MxY numpy array representing values of the constraints, where Y is the dimension
 	#and M is the number of constraints
+	#overWriteRows: [(i1, w1), (i2, w2), ..., (in, wn)].  Incides and values of rows in
+	#the upper square matrix to overwrite.  It is assumed that the indices are in increasing order
 	#useCotangentWeights: Use the cotangent weights (umbrella weights used if false)
-	#overWriteRows: True if the constraints are supposed to replace the corresponding
-	#rows of the matrix instead of being appended to the matrix
-	def solveFunctionWithConstraints(self, constraints, deltaCoords, g, useCotangentWeights = True, overWriteRows = False):
+	def solveFunctionWithConstraints(self, constraints, deltaCoords, g, overwriteRows = None, useCotangentWeights = True):
 		#TODO: Implement overwriteRows
-		(I, J, V) = self.getLaplacianSparseMatrixCoords(useCotangentWeights)
+		(I, J, V) = self.getLaplacianSparseMatrixCoords(overwriteRows, useCotangentWeights)
 		NVerts = len(self.vertices)
 		NConstraints = g.shape[0]
 		Y = g.shape[1]
@@ -107,6 +120,7 @@ class LaplacianMesh(PolyMesh):
 		A = sparse.coo_matrix((V, (I, J)), shape=(N,M)).tocsr()
 		ret = np.zeros((NVerts, Y))
 		for i in range(Y):
+			print "Solving column %i..."%i
 			thisColumn = lsqr(A, b[:, i])[0]
 			ret[:, i] = thisColumn
 		return ret
@@ -149,24 +163,78 @@ def transplantColorsLaplacianUsingBarycentric(TargetMesh, CX, tx, ux):
 	NX = CX.shape[0]
 	#Create a new mesh that will hold the result of the color transplant
 	NewMesh = LaplacianMesh()
-	#Step 1: Find all of the vertices that are contained within the same
-	#triangle, and sub-triangulate that triangle
-	
-	#Add the original vertices of the mesh
+	#Step 1: Copy the mesh
 	for v in TargetMesh.vertices:
 		NewMesh.addVertex(v.pos)
+	for f in TargetMesh.faces:
+		verts = [NewMesh.vertices[v.ID] for v in f.getVertices()]
+		NewMesh.addFace(verts)
 					
 	#Step 2: Setup the laplacian constraints and solve the system
 	print "Solving Laplacian Mesh system for colors..."
 	constraints = []
 	coloredVertices = []
-	for v in NewMesh.vertices:
-		if v.color:
-			coloredVertices.append(v)
-			constraints.append([(v.ID, 1)])
-	g = np.zeros((len(coloredVertices), 3))
-	for i in range(0, len(coloredVertices)):
-		g[i, :] = np.array(coloredVertices[i].color)
+	for i in range(tx.shape[0]):
+		triIndex = int(tx[i].flatten()[0])
+		vIDs = [v.ID for v in NewMesh.faces[triIndex].getVertices()]
+		constraints.append([(vIDs[0], ux[i, 0]), (vIDs[1], ux[i, 1]), (vIDs[2], ux[i, 2])])
+	g = CX.copy()
+	deltaCoords = np.zeros((len(NewMesh.vertices), 3))
+	CY = NewMesh.solveFunctionWithConstraints(constraints, deltaCoords, g)
+	#Make sure colors don't go above 1
+	CY[CY > 1] = 1
+	CY = CY/CY.max()
+	#Copy colors over
+	for i in range(0, CY.shape[0]):
+		C = CY[i, :]
+		NewMesh.vertices[i].color = [C[0], C[1], C[2]] 
+	print "Finished Laplacian Mesh system..."
+	print CY
+	return NewMesh
+
+#An application of Laplacian meshes for blending color smoothly across a mesh
+#TargetMesh: The target mesh
+#CX: an array of colors for the transplanted point set
+#tx: Indices of the triangles in "TargetMesh" where each of the points in X falls
+#ux: Barycentric coordinates of each point
+#TODO: FINISH THIS
+def transplantColorsLaplacianUsingBarycentricSubdivision(TargetMesh, CX, tx, ux):
+	NX = CX.shape[0]
+	#Create a new mesh that will hold the result of the color transplant
+	NewMesh = LaplacianMesh()
+	#Step 1: Copy over the target mesh
+	for v in TargetMesh.vertices:
+		NewMesh.addVertex(v.pos)
+	for f in TargetMesh.faces:
+		verts = [NewMesh.vertices[v.ID] for v in f.getVertices()]
+		NewMesh.addFace(verts)	
+	
+	#Step 2: Find all of the vertices that are contained within the same
+	#triangle, and subdivide that triangle
+	#Add the vertices of the transplanted mesh that fall inside
+	#different triangles
+	tris = []
+	for i in range(len(TargetMesh.faces)):
+		tris.append([])
+	for i in range(len(tx)):
+		triIndex = int(tx[i].flatten()[0])
+		triVertices = [v.pos for v in TargetMesh.faces[triIndex].getVertices()]
+		newPos = Point3D(0, 0, 0)
+		for k in range(len(triVertices)):
+			newPos = newPos + ux[i, k]*triVertices[k]
+		newVertex = NewMesh.addVertex(newPos, [CX[i, 0], CX[i, 1], CX[i, 2]])
+		#Store along the color with this new vertex
+		tris[triIndex].append(newVertex)	
+	
+	#Step 3: Setup the laplacian constraints and solve the system
+	print "Solving Laplacian Mesh system for colors..."
+	constraints = []
+	coloredVertices = []
+	for i in range(tx.shape[0]):
+		triIndex = int(tx[i].flatten()[0])
+		vIDs = [v.ID for v in NewMesh.faces[triIndex].getVertices()]
+		constraints.append([(vIDs[0], ux[i, 0]), (vIDs[1], ux[i, 1]), (vIDs[2], ux[i, 2])])
+	g = CX.copy()
 	deltaCoords = np.zeros((len(NewMesh.vertices), 3))
 	CY = NewMesh.solveFunctionWithConstraints(constraints, deltaCoords, g)
 	#Make sure colors don't go above 1
