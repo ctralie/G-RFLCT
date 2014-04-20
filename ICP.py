@@ -9,7 +9,7 @@ import numpy.linalg as linalg
 import scipy.spatial as spatial
 
 ICP_MAXITER = 100
-ICP_NPOINTSAMPLES = 1000
+ICP_NPOINTSAMPLES = 500
 
 def getRigidTransformationSVD(Points, TargetPoints):
 	P = Points.copy()
@@ -52,7 +52,7 @@ def transformPoints(T, P):
 #as the intial guess
 #pointToPlane: Whether or not to do point to plane ICP
 #update: Update the points to reflect the best found transformation?
-def ICP_PointsToMesh(P, M, allPermsAndFlips = False, pointToPlane = False, update = False, verbose = False):
+def ICP_PointsToMesh(P, M, allPermsAndFlips = False, pointToPlane = False, update = False, verbose = False, glcanvas = None, glmutex = None):
 	MCentroid = M.getCentroid()
 	NM = len(M.vertices)
 	MPoints = np.zeros((NM, 3))
@@ -154,6 +154,9 @@ def ICP_PointsToMesh(P, M, allPermsAndFlips = False, pointToPlane = False, updat
 								lastidx = idx
 								lastdists = dists
 								T = getRigidTransformationSVD(PPoints, MPointsThis)
+								if glcanvas: #Update the GUI if applicable
+									glcanvas.ICPTransformation = T
+									glcanvas.Refresh()
 								numIter = numIter + 1
 								if verbose:
 									print ".",
@@ -189,12 +192,12 @@ def ICP_PointsToMesh(P, M, allPermsAndFlips = False, pointToPlane = False, updat
 			P.points[i] = Point3D(OrigPoints[i, 0], OrigPoints[i, 1], OrigPoints[i, 2])
 	return AllTransformations, minIndex, error
 
-def ICP_MeshToMesh(M1, M2, allPermsAndFlips = False, pointToPlane = False, update = False):
+def ICP_MeshToMesh(M1, M2, allPermsAndFlips = False, pointToPlane = False, update = False, verbose = False, glcanvas = None, glmutex = None):
 	P = PointCloud()
 	for i in range(len(M1.vertices)):
 		P.points.append(M1.vertices[i].pos)
 		P.colors.append([1, 0, 0])
-	AllTransformations, minIndex, error = ICP_PointsToMesh(P, M2, allPermsAndFlips, pointToPlane, update)
+	AllTransformations, minIndex, error = ICP_PointsToMesh(P, M2, allPermsAndFlips, pointToPlane, update, verbose, glcanvas, glmutex)
 	for i in range(len(M1.vertices)):
 		M1.vertices[i].pos = P.points[i]
 	return AllTransformations, minIndex, error
