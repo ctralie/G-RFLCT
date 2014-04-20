@@ -107,7 +107,6 @@ class PointCloud(object):
 		idx = lambdas.argsort()[::-1]
 		lambdas = lambdas[idx]
 		axes = axes[:, idx]
-		print lambdas
 		Axis1 = Vector3D(axes[0, 0], axes[1, 0], axes[2, 0])
 		Axis2 = Vector3D(axes[0, 1], axes[1, 1], axes[2, 1])
 		Axis3 = Vector3D(axes[0, 2], axes[1, 2], axes[2, 2])

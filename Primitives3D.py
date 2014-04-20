@@ -6,6 +6,7 @@ import math
 from numpy import matrix
 import numpy as np
 import numpy.linalg as linalg
+import matplotlib.pyplot as plt
 
 #############################################################
 ####                 PRIMITIVE CLASSES                  #####
@@ -546,12 +547,11 @@ def getClosestPoint(Vs, P):
 		A = Vs[i]
 		B = Vs[(i+1)%len(Vs)]
 		dL = B - A
-		dL.normalize()
-		dP = PPlane - A
-		PProjRel = dL.proj(dP)
-		PClosest = PProjRel + A
-		t = PProjRel.Dot(dL) #Parameter representing where the point is
+		PProjRel = dL.proj(PPlane - A)
+		PClosest = A + PProjRel
+		#Parameter representing where the point is
 		#in the interior of the segment AB
+		t = dL.Dot(PProjRel)/dL.squaredMag()
 		#If the projected point is to the left of A, A is the closest
 		if t < 0:
 			PClosest = A
@@ -560,6 +560,7 @@ def getClosestPoint(Vs, P):
 			PClosest = B
 		#Otherwise it is in the interior
 		distSqr = (P - PClosest).squaredMag()
+
 		if distSqr < minDist:
 			minDist = distSqr
 			ret = PClosest
@@ -589,9 +590,31 @@ def printPointsList(L, name):
 			print "]"
 
 if __name__ == '__main__':
-	Vs = [Point3D(0, 0, 0), Point3D(1, 0, 0), Point3D(0, 1, 0)]
-	P = Point3D(0.5, 0.6, 2)
-	print getClosestPoint(Vs, P)
+	Vs = [Point3D(0.00360787, 0.0590845, -0.0482064), Point3D(0.0396016, 0.0424315, -0.0762202), Point3D(0.0301187, 0.0612541, -0.0644878)]
+	P = Point3D(0.0142555, 0.0875641, -0.0460397)
+#	Vs = [Point3D(0, 0, 0), Point3D(1, 0, 0), Point3D(0, 1, 0)]
+#	P = Point3D(0.5, 0.6, 2)
+	Closest = getClosestPoint(Vs, P)
+	
+	Axis1 = Vs[1] - Vs[0]
+	Axis2 = Vs[2] - Vs[0]
+	Axis2 = Axis1.projPerp(Axis2)
+	Axis1.normalize()
+	Axis2.normalize()
+	A = Point3D(0, 0, 0)
+	B = Point3D(Axis1.proj(Vs[1] - Vs[0]).Length(), Axis2.proj(Vs[1] - Vs[0]).Length(), 0)
+	C = Point3D(Axis1.proj(Vs[2] - Vs[0]).Length(), Axis2.proj(Vs[2] - Vs[0]).Length(), 0)
+	X = Point3D(Axis1.proj(Closest - Vs[0]).Length(), Axis2.proj(Closest - Vs[0]).Length(), 0)
+	O = Point3D(Axis1.proj(P - Vs[0]).Length(), Axis2.proj(P - Vs[0]).Length(), 0)
+	print "O = %s"%O
+	print "X = %s"%X
+	
+	plt.plot([A.x, B.x, C.x, A.x], [A.y, B.y, C.y, A.y], 'r')
+	plt.hold(True)
+	plt.plot([X.x], [X.y], 'bo')
+	plt.plot([O.x], [O.y], 'go')
+	plt.plot([X.x, O.x], [X.y, O.y], 'r')
+	plt.show()
 
 if __name__ == '__main__3':
 	m = Matrix4([0, 1, 0, 0, 0, 0, 1, 2, 1, 0, 0, 0, 0, 0, 0, 1])

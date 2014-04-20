@@ -374,7 +374,6 @@ class PolyMesh(object):
 				if e.ID != -1: #If the edge has not already been removed
 					self.removeEdge(e)
 		self.needsDisplayUpdate = True
-			
 	
 	#Split every face into N triangles by creating a vertex at
 	#the centroid of each face
@@ -670,7 +669,6 @@ class PolyMesh(object):
 		idx = lambdas.argsort()[::-1]
 		lambdas = lambdas[idx]
 		axes = axes[:, idx]
-		print lambdas
 		Axis1 = Vector3D(axes[0, 0], axes[1, 0], axes[2, 0])
 		Axis2 = Vector3D(axes[0, 1], axes[1, 1], axes[2, 1])
 		Axis3 = Vector3D(axes[0, 2], axes[1, 2], axes[2, 2])
@@ -863,7 +861,6 @@ class PolyMesh(object):
 						v2.color = [a/255.0 for a in v2.color]
 					break
 			
-	
 	def saveOffFile(self, filename, verbose = False, outputColors = True, output255 = False):
 		nV = len(self.vertices)
 		nE = len(self.edges)

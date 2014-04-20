@@ -132,6 +132,11 @@ class MeshViewerCanvas(glcanvas.GLCanvas):
 			self.mesh.sliceBelowPlane(self.cutPlane, False)
 			self.mesh.starTriangulate() #TODO: This is a patch to deal with "non-planar faces" added
 			self.Refresh()
+
+	def FillHoles(self, evt):
+		self.mesh.fillHoles()
+		self.mesh.needsDisplayUpdate = True
+		self.Refresh()
 	
 	def ComputeGeodesicDistances(self, evt):
 		if not self.mesh:
@@ -373,6 +378,12 @@ class MeshViewerFrame(wx.Frame):
 		CutWithPlaneButton = wx.Button(self, -1, "Cut With Plane")
 		self.Bind(wx.EVT_BUTTON, self.glcanvas.CutWithPlane, CutWithPlaneButton)
 		self.rightPanel.Add(CutWithPlaneButton)
+
+		#Buttons for filling holes
+		self.rightPanel.Add(wx.StaticText(self, label="Fill Holes"), 0, wx.EXPAND)
+		FillHolesButton = wx.Button(self, -1, "Fill Holes")
+		self.Bind(wx.EVT_BUTTON, self.glcanvas.FillHoles, FillHolesButton)
+		self.rightPanel.Add(FillHolesButton)
 		
 		#Buttons for computing geodesic distance
 		self.rightPanel.Add(wx.StaticText(self, label="Geodesic Distances"), 0, wx.EXPAND)

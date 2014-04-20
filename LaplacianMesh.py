@@ -277,7 +277,7 @@ def transplantColorsLaplacianUsingDelaunay(TargetMesh, CX, tx, ux):
 		newVertex = NewMesh.addVertex(newPos, [CX[i, 0], CX[i, 1], CX[i, 2]])
 		#Store along the color with this new vertex
 		tris[triIndex].append(newVertex)
-	for i in range(1, len(tris)):
+	for i in range(0, len(tris)):
 		#Get the vertices in the new mesh corresponding to this triangle
 		vertices = [NewMesh.vertices[v.ID] for v in TargetMesh.faces[i].getVertices()]
 		if len(tris[i]) > 0:

@@ -233,20 +233,25 @@ def pointInsideConvexPolygon2D(poly, P, CLOSENESS_EPS = EPS):
 
 #Get the barycentric coordinates of X inside of the triangle ABC on the plane
 #(Z coordinate is ignored)
-def getBarycentricCoords(A, B, C, X):
+def getBarycentricCoords(A, B, C, X, checkValidity = True):
 	T = np.array( [ [A.x - C.x, B.x - C.x ], [A.y - C.y, B.y - C.y] ] )
 	y = np.array( [ [X.x - C.x], [X.y - C.y] ] )
 	lambdas = linalg.solve(T, y)
 	lambdas = lambdas.flatten()
 	lambdas = np.append(lambdas, 1 - (lambdas[0] + lambdas[1]))
-	if (lambdas[0] < 0 or lambdas[1] < 0 or lambdas[2] < 0):
-		print "ERROR: Not a convex combination; lambda = %s"%lambdas
-		print "pointInsideConvexPolygon2D = %s"%pointInsideConvexPolygon2D([A, B, C], X, 0)
-		plt.plot([A.x, B.x, C.x, A.x], [A.y, B.y, C.y, A.y], 'r')
-		plt.hold(True)
-		plt.plot([X.x], [X.y], 'b.')
-		plt.show()
-	assert (lambdas[0] >= 0 and lambdas[1] >= 0 and lambdas[2] >= 0)
+	if checkValidity:
+		if (lambdas[0] < 0 or lambdas[1] < 0 or lambdas[2] < 0):
+			print "ERROR: Not a convex combination; lambda = %s"%lambdas
+			print "pointInsideConvexPolygon2D = %s"%pointInsideConvexPolygon2D([A, B, C], X, 0)
+			plt.plot([A.x, B.x, C.x, A.x], [A.y, B.y, C.y, A.y], 'r')
+			plt.hold(True)
+			plt.plot([X.x], [X.y], 'b.')
+			plt.show()
+		assert (lambdas[0] >= 0 and lambdas[1] >= 0 and lambdas[2] >= 0)
+	else:
+		lambdas[0] = max(lambdas[0], 0)
+		lambdas[1] = max(lambdas[1], 0)
+		lambdas[2] = max(lambdas[2], 0)
 	return lambdas
 
 if __name__ ==  '__main__':

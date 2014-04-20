@@ -52,7 +52,7 @@ def transformPoints(T, P):
 #as the intial guess
 #pointToPlane: Whether or not to do point to plane ICP
 #update: Update the points to reflect the best found transformation?
-def ICP_PointsToMesh(P, M, allPermsAndFlips = False, pointToPlane = False, update = False):
+def ICP_PointsToMesh(P, M, allPermsAndFlips = False, pointToPlane = False, update = False, verbose = False):
 	MCentroid = M.getCentroid()
 	NM = len(M.vertices)
 	MPoints = np.zeros((NM, 3))
@@ -121,8 +121,8 @@ def ICP_PointsToMesh(P, M, allPermsAndFlips = False, pointToPlane = False, updat
 								#In other words, T = R2*T2*R1*T1
 								T = R2.dot( T2.dot( R1.dot( T1 ) ) )
 							converged = False
-							lastidx = np.zeros(ICP_NPOINTSAMPLES)
-							lastdists = np.zeros(ICP_NPOINTSAMPLES)
+							lastidx = np.zeros(PPoints.shape[0])
+							lastdists = np.zeros(PPoints.shape[0])
 							#Find closest points and re-align until the closest points
 							#do not change
 							transformations = []
@@ -155,11 +155,14 @@ def ICP_PointsToMesh(P, M, allPermsAndFlips = False, pointToPlane = False, updat
 								lastdists = dists
 								T = getRigidTransformationSVD(PPoints, MPointsThis)
 								numIter = numIter + 1
-								print ".",
-							print ""
+								if verbose:
+									print ".",
+							if verbose:
+								print ""
 							AllTransformations.append(transformations)
 							err = getSquaredError(PPointsThis, MPointsThis)
-							print "err = %g"%err
+							if verbose:
+								print "err = %g"%err
 							if err < minError:
 								minError = err;
 								minIndex = len(AllTransformations) - 1
@@ -177,7 +180,8 @@ def ICP_PointsToMesh(P, M, allPermsAndFlips = False, pointToPlane = False, updat
 			break
 	
 	T = AllTransformations[minIndex][-1]
-	print "T = %s"%T
+	if verbose:
+		print "T = %s"%T
 	if update:
 		#Update the points in the point set
 		OrigPoints = transformPoints(T, OrigPoints)
@@ -190,7 +194,7 @@ def ICP_MeshToMesh(M1, M2, allPermsAndFlips = False, pointToPlane = False, updat
 	for i in range(len(M1.vertices)):
 		P.points.append(M1.vertices[i].pos)
 		P.colors.append([1, 0, 0])
-	AllTransformations, minIndex, error = ICP_PointsToMesh(P, M2, pointToPlane, update)
+	AllTransformations, minIndex, error = ICP_PointsToMesh(P, M2, allPermsAndFlips, pointToPlane, update)
 	for i in range(len(M1.vertices)):
 		M1.vertices[i].pos = P.points[i]
 	return AllTransformations, minIndex, error

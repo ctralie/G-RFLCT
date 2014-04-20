@@ -69,11 +69,7 @@ class MeshViewerCanvas(glcanvas.GLCanvas):
 		
 		#Face mesh variables and manipulation variables
 		self.mesh1 = None
-		self.mesh1Dist = None
-		self.mesh1DistLoaded = False
 		self.mesh2 = None
-		self.mesh2DistLoaded = False
-		self.mesh2Dist = None
 		self.mesh3 = None
 		#Holds the transformations of the best iteration in ICP
 		self.transformations = []
@@ -129,64 +125,13 @@ class MeshViewerCanvas(glcanvas.GLCanvas):
 		self.bbox.Union(self.mesh2.getBBox())
 		self.camera.centerOnBBox(self.bbox, theta = -math.pi/2, phi = math.pi/2)
 		self.Refresh()
-		
-	def MDSMesh1(self, evt):
-		if not self.mesh1:
-			print "ERROR: Mesh 1 not loaded yet"
-			return
-		if not self.mesh1DistLoaded:
-			print "ERROR: Mesh 1 distance matrix not loaded"
-			return
-		mds = manifold.MDS(n_components=2, dissimilarity="precomputed", n_jobs=1)
-		print "Doing MDS on mesh 1...."
-		pos = mds.fit(self.mesh1Dist).embedding_
-		print "Finished MDS on mesh 1"
-		for i in range(pos.shape[0]):
-			self.mesh1.vertices[i].pos = Point3D(pos[i, 0], pos[i, 1], pos[i, 2])
-		self.mesh1.needsDisplayUpdate = True
-		self.Refresh()
 	
-	def MDSMesh2(self, evt):
-		if not self.mesh2:
-			print "ERROR: Mesh 2 not loaded yet"
-			return
-		if not self.mesh2DistLoaded:
-			print "ERROR: Mesh 2 distance matrix not loaded"
-			return
-		mds = manifold.MDS(n_components=2, dissimilarity="precomputed", n_jobs=1)
-		print "Doing MDS on mesh 2..."
-		pos = mds.fit(self.mesh2Dist).embedding_
-		print "Finished MDS on mesh 2"
-		for i in range(pos.shape[0]):
-			self.mesh2.vertices[i].pos = Point3D(pos[i, 0], pos[i, 1], pos[i, 2])
-		self.mesh2.needsDisplayUpdate = True
-		self.Refresh()	
-	
-	def doGMDS(self, evt):
+	def doColorProjection(self, evt):
 		if self.mesh1 and self.mesh2:
-			if not self.mesh1DistLoaded:
-				print "Mesh 1 distance not loaded"
-				return
-			if not self.mesh2DistLoaded:
-				print "Mesh 2 distance not loaded"
-				return
-			N = len(self.mesh1.vertices)
-			VX = np.zeros((N, 3))
-			for i in range(N):
-				V = self.mesh1.vertices[i].pos
-				VX[i, :] = np.array([V.x, V.y, V.z])
-			print "Doing GMDS..."
-			t, u = GMDSPointsToMesh(VX, self.mesh1Dist, self.mesh2, self.mesh2Dist)
-			print "Finished GMDS"
-			#Update the vertices based on the triangles where they landed
-			#and the barycentric coordinates of those triangles
-			for i in range(N):
-				Vs = [v.pos for v in self.mesh2.faces[int(t[i].flatten()[0])].getVertices()]
-				pos = Point3D(0, 0, 0)
-				for k in range(3):
-					pos = pos + u[i, k]*Vs[k]
-				self.mesh1.vertices[i].pos = pos
-			self.mesh1.needsDisplayUpdate = True
+			AllTransformations, minIndex, error = ICP_MeshToMesh(self.mesh1, self.mesh2, False, False, False)
+			self.transformations = AllTransformations[minIndex]
+			self.savingMovie = True
+			self.movieIter = 0
 		else:
 			print "ERROR: One or both meshes have not been loaded yet"
 		self.Refresh()
@@ -255,11 +200,70 @@ class MeshViewerCanvas(glcanvas.GLCanvas):
 		glMaterialfv(GL_FRONT_AND_BACK, GL_SPECULAR, [0.2, 0.2, 0.2, 1.0])
 		glMaterialfv(GL_FRONT_AND_BACK, GL_SHININESS, 64)
 		
-		if self.mesh1:
-			self.mesh1.renderGL(True, True, False, False, None)
-		if self.mesh2:
-			self.mesh2.renderGL(self.displayMeshEdges, self.displayMeshVertices, self.displayMeshNormals, self.displayMeshFaces, None)
+		transform = np.eye(4)
+		if len(self.transformations) > 0:
+			transform = self.transformations[-1]
+		if self.savingMovie and self.movieIter >= 0 and len(self.transformations) > 0:
+			if self.movieIter < len(self.transformations):
+				transform = self.transformations[self.movieIter]
+		
+		if self.savingMovie and self.movieIter >= len(self.transformations):
+			if self.movieIter < len(self.transformations) + 15:
+				if self.mesh3:
+					self.mesh3.renderGL(self.displayMeshEdges, self.displayMeshVertices, self.displayMeshNormals, self.displayMeshFaces, None)
+			elif self.movieIter < len(self.transformations) + 30:
+				self.mesh2.renderGL(self.displayMeshEdges, self.displayMeshVertices, self.displayMeshNormals, self.displayMeshFaces, None)
+			elif self.movieIter < len(self.transformations) + 45:
+				if self.mesh3:
+					self.mesh3.renderGL(self.displayMeshEdges, self.displayMeshVertices, self.displayMeshNormals, self.displayMeshFaces, None)
+			elif self.movieIter < len(self.transformations) + 60:
+				self.mesh2.renderGL(self.displayMeshEdges, self.displayMeshVertices, self.displayMeshNormals, self.displayMeshFaces, None)
+			elif self.movieIter < len(self.transformations) + 75:
+				if self.mesh3:
+					self.mesh3.renderGL(self.displayMeshEdges, self.displayMeshVertices, self.displayMeshNormals, self.displayMeshFaces, None)
+			else:
+				self.savingMovie = False
+				os.popen3("ffmpeg -f image2 -r 4 -i COLOR%d.png -r 4 COLOR.ogg")
+			saveImageGL(self, "COLOR%i.png"%self.movieIter)	
+			self.movieIter = self.movieIter + 1
+
+		if self.movieIter < len(self.transformations):
+			if self.mesh1:
+				glPushMatrix()
+				glMultMatrixd(transform.transpose().flatten())
+				self.mesh1.renderGL(self.displayMeshEdges, self.displayMeshVertices, self.displayMeshNormals, self.displayMeshFaces, None)
+				glPopMatrix()
+			if self.mesh2:
+				self.mesh2.renderGL(self.displayMeshEdges, self.displayMeshVertices, self.displayMeshNormals, self.displayMeshFaces, None)
 		self.SwapBuffers()
+		
+		if self.savingMovie:
+			if self.movieIter == -1:
+				if self.mesh1 and self.mesh2:
+					print "Doing ICP"
+					AllTransformations, minIndex, error = ICP_MeshToMesh(self.mesh1, self.mesh2)
+					print "Finished ICP"
+					self.transformations = AllTransformations[minIndex]
+					self.centerOnMesh2(None)
+			else:
+				saveImageGL(self, "COLOR%i.png"%self.movieIter)
+				if self.movieIter >= len(self.transformations) and not self.mesh3:
+					#Now transplant the colors onto the target mesh
+					VX = np.zeros((len(self.mesh1.vertices), 3))
+					CX = np.zeros((len(self.mesh1.vertices), 3))
+					for i in range(0, len(self.mesh1.vertices)):
+						P = self.mesh1.vertices[i].pos
+						C = self.mesh1.vertices[i].color
+						VX[i, :] = np.array([P.x, P.y, P.z])
+						CX[i, :] = C
+					VX = transformPoints(self.transformations[-1], VX)
+					print "Getting initial guess of point positions..."
+					#ts, us = getInitialGuess2DProjection(VX, self.mesh2)
+					ts, us = getInitialGuessClosestPoints(VX, self.mesh2)
+					print "Finished initial guess of point positions"
+					self.mesh3 = transplantColorsLaplacianUsingBarycentric(self.mesh2, CX, ts, us)
+			self.movieIter = self.movieIter + 1
+			self.Refresh()
 	
 	def initGL(self):		
 		glLightModelfv(GL_LIGHT_MODEL_AMBIENT, [0.2, 0.2, 0.2, 1.0])
@@ -333,20 +337,11 @@ class MeshViewerFrame(wx.Frame):
 		menuBar.Append(filemenu,"&File") # Adding the "filemenu" to the MenuBar
 		self.SetMenuBar(menuBar)  # Adding the MenuBar to the Frame content.
 		self.glcanvas = MeshViewerCanvas(self)
-		self.glcanvas.mesh1 = None
-		self.glcanvas.mesh2 = None
-		if mesh1:
-			(self.glcanvas.mesh1, self.glcanvas.mesh1Dist) = self.loadMesh(mesh1)
-			if self.glcanvas.mesh1Dist.shape[0] > 0:
-				self.glcanvas.mesh1DistLoaded = True
-			else:
-				self.glcanvas.mesh1DistLoaded = False
-		if mesh2:
-			(self.glcanvas.mesh2, self.glcanvas.mesh2Dist) = self.loadMesh(mesh2)
-			if self.glcanvas.mesh2Dist.shape[0] > 0:
-				self.glcanvas.mesh2DistLoaded = True
-			else:
-				self.glcanvas.mesh2DistLoaded = False
+		self.glcanvas.mesh1 = mesh1
+		self.glcanvas.mesh2 = mesh2
+		if mesh1 and mesh2:
+			self.glcanvas.savingMovie = True
+			self.glcanvas.movieIter = -1
 		
 		self.rightPanel = wx.BoxSizer(wx.VERTICAL)
 		
@@ -362,18 +357,7 @@ class MeshViewerFrame(wx.Frame):
 		self.Bind(wx.EVT_BUTTON, self.glcanvas.centerOnBoth, bothButton)
 		viewPanel.Add(bothButton, 0, wx.EXPAND)
 		self.rightPanel.Add(wx.StaticText(self, label="Views"), 0, wx.EXPAND)
-		self.rightPanel.Add(viewPanel, 0, wx.EXPAND)
-		
-		#Buttons for MDS
-		MDSPanel = wx.BoxSizer(wx.HORIZONTAL)
-		MDS1Button = wx.Button(self, -1, "MDS Mesh1")
-		self.Bind(wx.EVT_BUTTON, self.glcanvas.MDSMesh1, MDS1Button)
-		MDSPanel.Add(MDS1Button, 0, wx.EXPAND)
-		MDS2Button = wx.Button(self, -1, "MDS Mesh2")
-		self.Bind(wx.EVT_BUTTON, self.glcanvas.MDSMesh2, MDS2Button)
-		MDSPanel.Add(MDS2Button, 0, wx.EXPAND)
-		self.rightPanel.Add(wx.StaticText(self, label="MDS on Meshes"), 0, wx.EXPAND)
-		self.rightPanel.Add(MDSPanel, 0, wx.EXPAND)				
+		self.rightPanel.Add(viewPanel, 0, wx.EXPAND)		
 		
 		#Checkboxes for displaying data
 		self.displayMeshFacesCheckbox = wx.CheckBox(self, label = "Display Mesh Faces")
@@ -391,9 +375,9 @@ class MeshViewerFrame(wx.Frame):
 
 		
 		#Button for doing ICP
-		GMDSButton = wx.Button(self, -1, "DO GMDS")
-		self.Bind(wx.EVT_BUTTON, self.glcanvas.doGMDS, GMDSButton)
-		self.rightPanel.Add(GMDSButton, 0, wx.EXPAND)
+		COLORButton = wx.Button(self, -1, "Do Color Projection")
+		self.Bind(wx.EVT_BUTTON, self.glcanvas.doColorProjection, COLORButton)
+		self.rightPanel.Add(COLORButton, 0, wx.EXPAND)
 		
 		#Finally add the two main panels to the sizer		
 		self.sizer = wx.BoxSizer(wx.HORIZONTAL)
@@ -404,53 +388,41 @@ class MeshViewerFrame(wx.Frame):
 		self.Layout()
 		self.Show()
 	
-	def loadMesh(self, filepath):
-		print "Loading mesh %s..."%filepath
-		mesh = LaplacianMesh()
-		mesh.loadFile(filepath)
-		print "Finished loading mesh 1\n %s"%mesh
-		#Now try to load in the distance matrix
-		fileName, fileExtension = os.path.splitext(filepath)
-		matfile = sio.loadmat("%s.mat"%fileName)
-		D = np.array([])
-		if 'D' in matfile:
-			D = matfile['D']
-		else:
-			print "ERROR: No distance matrix found for mesh %s"%filepath
-		return (mesh, D)		
-	
 	def OnLoadMesh1(self, evt):
+		print "Mesh 1 menu"
 		dlg = wx.FileDialog(self, "Choose a file", ".", "", "OBJ files (*.obj)|*.obj|OFF files (*.off)|*.off", wx.OPEN)
 		if dlg.ShowModal() == wx.ID_OK:
 			filename = dlg.GetFilename()
 			dirname = dlg.GetDirectory()
 			filepath = os.path.join(dirname, filename)
 			print dirname
-			(self.glcanvas.mesh1, self.glcanvas.mesh1Dist) = self.loadMesh(filepath)
+			self.glcanvas.mesh1 = LaplacianMesh()
+			print "Loading mesh %s..."%filename
+			self.glcanvas.mesh1.loadFile(filepath)
+			print "Finished loading mesh 1\n %s"%self.glcanvas.mesh1
+			print self.glcanvas.mesh1
 			self.glcanvas.bbox = self.glcanvas.mesh1.getBBox()
 			print "Mesh BBox: %s\n"%self.glcanvas.bbox
 			self.glcanvas.camera.centerOnBBox(self.glcanvas.bbox, theta = -math.pi/2, phi = math.pi/2)
-			#Now try to load in the distance matrix
-			if self.glcanvas.mesh1Dist.shape[0] > 0:
-				self.glcanvas.mesh1DistLoaded = True
 			self.glcanvas.Refresh()
 		dlg.Destroy()
 		return
 
 	def OnLoadMesh2(self, evt):
+		print "Mesh 2 menu"
 		dlg = wx.FileDialog(self, "Choose a file", ".", "", "OBJ files (*.obj)|*.obj|OFF files (*.off)|*.off", wx.OPEN)
 		if dlg.ShowModal() == wx.ID_OK:
 			filename = dlg.GetFilename()
 			dirname = dlg.GetDirectory()
 			filepath = os.path.join(dirname, filename)
 			print dirname
-			(self.glcanvas.mesh2, self.glcanvas.mesh2Dist) = self.loadMesh(filepath)
-			self.glcanvas.bbox = self.glcanvas.mesh2.getBBox()
-			print "Mesh BBox: %s\n"%self.glcanvas.bbox
-			self.glcanvas.camera.centerOnBBox(self.glcanvas.bbox, theta = -math.pi/2, phi = math.pi/2)
-			#Now try to load in the distance matrix
-			if self.glcanvas.mesh2Dist.shape[0] > 0:
-				self.glcanvas.mesh2DistLoaded = True
+			self.glcanvas.mesh2 = LaplacianMesh()
+			print "Loading mesh %s..."%filename
+			self.glcanvas.mesh2.loadFile(filepath)
+			print "Finished loading mesh 2\n %s"%self.glcanvas.mesh2
+			print self.glcanvas.mesh2
+			print "Mesh BBox: %s\n"%self.glcanvas.mesh2.getBBox()
+			self.glcanvas.bbox.Union(self.glcanvas.mesh2.getBBox())
 			self.glcanvas.Refresh()
 		dlg.Destroy()
 		return
@@ -481,6 +453,8 @@ if __name__ == '__main__':
 	m1 = None
 	m2 = None
 	if len(argv) >= 3:
-		m1 = argv[1]
-		m2 = argv[2]
+		m1 = LaplacianMesh()
+		m1.loadFile(argv[1])
+		m2 = LaplacianMesh()
+		m2.loadFile(argv[2])
 	viewer = MeshViewer(m1, m2)
