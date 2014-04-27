@@ -16,7 +16,7 @@ import matplotlib.cm as cm
 from ICP import *
 from Utilities2D import *
 
-GMDS_MAXITER = 1000
+GMDS_MAXITER = 100
 
 #Denoted as Dy(ti, tj) in my notes
 def getDyij(MeshY, DY, ti, tj):
@@ -54,9 +54,10 @@ def getAandb(DX, DY, MeshY, ts, us, i, js):
 			continue
 		tj = int(ts[j].flatten()[0])
 		uj = us[j, :]
+		uj = uj.flatten() #Make uj a column vector
 		Dyij = getDyij(MeshY, DY, ti, tj)
-		b = b - (2*DX[i, j])*uj.dot(Dyij)
-		APart = (uj.transpose()).dot(Dyij)
+		b = b - (2*DX[i, j])*uj.transpose().dot(Dyij)
+		APart = Dyij.transpose().dot(uj)
 		A = A + np.outer(APart, APart)
 	return (A, b)
 
@@ -175,7 +176,7 @@ def vectorInsideTriangleVertex(vec, v1, face):
 	verts = face.getVertices()
 	starti = 0
 	for i in range(len(verts)):
-		if v == v1:
+		if verts[i] == v1:
 			starti = i
 			break
 	v2 = verts[(starti+1)%len(verts)]
@@ -196,12 +197,12 @@ def vectorInsideTriangleVertex(vec, v1, face):
 	v = Axis2.proj(vec).Length()
 	u2 = Axis1.proj(vec2).Length()
 	v2 = Axis2.proj(vec2).Length()
-	det1 = np.zeros(3)
+	det1 = np.zeros((3, 3))
 	det1[0, :] = np.array([1, 0, 0])
 	det1[1, :] = np.array([1, 1, 0])
 	det1[2, :] = np.array([u, v, 0])
 	det1 = linalg.det(det1)
-	det2 = np.zeros(3)
+	det2 = np.zeros((3, 3))
 	det2[0, :] = np.array([1, 0, 0])
 	det2[1, :] = np.array([u, v, 0])
 	det2[2, :] = np.array([u2, v2, 0])
@@ -217,76 +218,74 @@ def plotRasterizedStress(A, b, triBefore, triNew, ubefore, unew):
 	#Spread some barycentric coordinates out
 	#and get colors proportional to the stress at
 	#those coordinates
-	ux, uy = np.mgrid[-20:20, -20:20]
-	ux = ux.flatten()/10.0
-	uy = uy.flatten()/10.0
+	N = 100
+	Extent = 1.2
+	ux, uy = np.mgrid[-Extent:Extent:np.complex(0, N), -Extent:Extent:np.complex(0, N)]
 	uz = 1 - (ux + uy)
-	u = np.zeros((3, ux.shape[0]))
-	u[0, :] = ux
-	u[1, :] = uy
-	u[2, :] = uz
-	print "u.shape = %s, A.shape = %s, b.shape = %s"%(u.shape, A.shape, b.shape)
-	Stresses = (u.transpose()).dot(A.dot(u)) + b.dot(u)
-	#Normalize to the range [0, 1]
-	Stresses = Stresses.flatten()
-	Stresses = Stresses - Stresses.min()
-	Stresses = Stresses/Stresses.max()
-	minIndex = np.argmin(Stresses)
-	print "Stresses.shape = %s, minIndex = %i"%(Stresses.shape, minIndex)
-	cmConvert = cm.get_cmap("jet")
-	#Convert colors
-	Stresses = cmConvert(Stresses)
-	
-	verts = [v.pos for v in triBefore.getVertices()]
-	[v1, v2, v3] = [verts[0], verts[1], verts[2]]
-	vOrigin = v1
-	#Find some 2D coordinates representative of these points
-	Axis1 = v2 - v1
-	Axis2 = v3 - v1
-	Axis2 = Axis1.projPerp(Axis2)
-	Axis1.normalize()
-	Axis2.normalize()
-	V = np.zeros((2, 3))
-	V[0, 1] = Axis1.proj(v2 - vOrigin).Length()
-	V[1, 1] = Axis2.proj(v2 - vOrigin).Length()
-	V[0, 2] = Axis1.proj(v3 - vOrigin).Length()
-	V[1, 2] = Axis2.proj(v3 - vOrigin).Length()
-	print "ubefore: %s"%ubefore
-	print "vertsbefore: %s"%[v.ID for v in triBefore.getVertices()]
-	Pos = V.dot(u)
-	xPos = Pos[0, :]
-	yPos = Pos[1, :]
-	
-	#Plot the stresses
-	plt.scatter(xPos, yPos, color = Stresses)
-	plt.hold(True)
-	#Plot the location of the triangle before
-	plt.plot([V[0, 0], V[0, 1], V[0, 2], V[0, 0]], [V[1, 0], V[1, 1], V[1, 2], V[1, 0]], 'r')
-	#Plot the location of the optimal point before
-	Pos = V.dot(ubefore).flatten()
-	plt.plot(Pos[0], Pos[1], 'b.')
-	
-	#Plot the location of the triangle after
-	#Plot the location of the optimal point after
-	verts = [v.pos for v in triNew.getVertices()]
-	print "uafter: %s"%unew
-	print "vertsafter: %s"%[v.ID for v in triNew.getVertices()]
-	[v1, v2, v3] = [verts[0], verts[1], verts[2]]
-	V[0, 0] = Axis1.proj(v1 - vOrigin).Length()
-	V[1, 0] = Axis2.proj(v1 - vOrigin).Length()
-	V[0, 1] = Axis1.proj(v2 - vOrigin).Length()
-	V[1, 1] = Axis2.proj(v2 - vOrigin).Length()
-	V[0, 2] = Axis1.proj(v3 - vOrigin).Length()
-	V[1, 2] = Axis2.proj(v3 - vOrigin).Length()
-	plt.plot([V[0, 0], V[0, 1], V[0, 2], V[0, 0]], [V[1, 0], V[1, 1], V[1, 2], V[1, 0]], 'b')
-	Pos = V.dot(unew)
-	plt.plot(Pos[0], Pos[1], 'go');
-	
-	#Plot the numerically found min
-	plt.plot(xPos[minIndex], yPos[minIndex], 'xg');
+	u = np.zeros((3, ux.flatten().shape[0]))
+	u[0, :] = ux.flatten()
+	u[1, :] = uy.flatten()
+	u[2, :] = uz.flatten()
+	Stresses = A.dot(u)
+	Stresses = (u*Stresses).sum(0)
+	Stresses = Stresses + b.dot(u)
+	Stresses = Stresses.reshape(N, N)
+	#Stresses = np.log(Stresses - Stresses.min() + 0.1)
+	plt.imshow(Stresses, extent = [-Extent, Extent, -Extent, Extent], origin = 'lower')
 	plt.title('Stresses in triangle')
+	plt.hold(True)
+	plt.plot(unew[1], unew[0], 'rx')
+	plt.plot([0, 1, 0, 0], [1, 0, 0, 1], 'r')
+	plt.colorbar()
 	plt.show()
-	
+
+def plotRasterizedStressEdges(A, b, tri, ubefore, unew):
+	N = 100
+	Extent = 1.2
+	ux, uy = np.mgrid[-Extent:Extent:np.complex(0, N), -Extent:Extent:np.complex(0, N)]
+	uz = 1 - (ux + uy)
+	u = np.zeros((3, ux.flatten().shape[0]))
+	u[0, :] = ux.flatten()
+	u[1, :] = uy.flatten()
+	u[2, :] = uz.flatten()
+	Stresses = A.dot(u)
+	Stresses = (u*Stresses).sum(0)
+	Stresses = Stresses + b.dot(u)
+	Stresses = Stresses.reshape(N, N)
+	#Stresses = np.log(Stresses - Stresses.min() + 0.1)
+	plt.subplot(2, 2, 0)
+	plt.imshow(Stresses, extent = [-Extent, Extent, -Extent, Extent], origin = 'lower')
+	plt.title('Stresses in triangle')
+	plt.hold(True)
+	plt.plot(unew[1], unew[0], 'rx')
+	plt.plot(ubefore[1], ubefore[0], 'gx')
+	plt.plot([1, 0], [0, 1], 'r')
+	plt.plot([0, 1], [0, 0], 'g')
+	plt.plot([0, 0], [1, 0], 'b')
+	Stress = unew.transpose().dot(A.dot(unew)) + b.dot(unew)
+	StressBefore = ubefore.transpose().dot(A.dot(ubefore)) + b.dot(ubefore)
+	StressDiff = Stress - StressBefore
+	plt.title("Stress: %g, StressDiff: %g"%(Stress, StressDiff))
+	print unew
+	plt.colorbar()
+	#The edge (0, 1, 0) - (1, 0, 0): Red
+	#The edge (0, 0, 1) - (0, 1, 0): Green
+	#The edge (0, 0, 1) - (1, 0, 0): Blue
+	ua = np.arange(0, 1, 0.01)
+	ub = 1 - ua
+	colors = ['r', 'g', 'b']
+	for i in range(3):
+		u = np.zeros((3, len(ua)))
+		u[i, :] = ua
+		u[(i+1)%3, :] = ub
+		Stresses = A.dot(u)
+		Stresses = (u*Stresses).sum(0)
+		Stresses = Stresses + b.dot(u)
+		Stresses = Stresses.flatten()
+		plt.subplot(2, 2, i+1)
+		plt.plot(ua, Stresses, colors[i])
+		plt.title('Min: %g'%np.min(Stresses))
+	plt.show()	
 
 #VX: NX x 3 numpy array of vertex positions in the X point set
 #DX: NX x NX matrix of geodesic distances in the point set
@@ -302,20 +301,23 @@ def GMDSPointsToMesh(VX, DX, MeshY, DY):
 	#the ICP class
 	PX = PointCloud()
 	for i in range(NX):
-		PX.points.append(Point3D(VX[i, 0], VX[i, 1], VX[i, 2]))
+		PX.points.append(Point3D(VX[i, 0], VX[i, 1], -VX[i, 2]))
 		PX.colors.append([1, 0, 0])
 
 	####Step 2: Rigidly align X and Y using ICP
+	print "Doing ICP..."
 	AllTransformations, minIndex, error = ICP_PointsToMesh(PX, MeshY, False, False, True)
 	VXTrans = np.zeros(VX.shape)
 	for i in range(0, len(PX.points)):
 		VXTrans[i, :] = np.array([PX.points[i].x, PX.points[i].y, PX.points[i].z])
+	print "Finished ICP"
 	
 	####Step 3: Project onto the axis of least variation and use barycentric coordinates
 	#in triangles as the intialization for GMDS
+	print "Getting initial guess..."
 	ts, us = getInitialGuessClosestPoints(VXTrans, MeshY)
 	#ts, us = getInitialGuess2DProjection(VXTrans, MeshY)
-	return (ts, us)
+	print "Finished Getting Initial guess"
 	
 	####Step 4: Run the GMDS algorithm to refine t and u
 	thisiter = 0
@@ -326,6 +328,9 @@ def GMDSPointsToMesh(VX, DX, MeshY, DY):
 	print "Computing initial gradients..."
 	for i in range(NX):
 		(As[i], bs[i]) = getAandb(DX, DY, MeshY, ts, us, i, range(0, NX))
+		print ".",
+		if i%30 == 0:
+			print ""
 	print "Finished computing initial gradients"
 	#Do the optimization iterations
 	while thisiter < GMDS_MAXITER:
@@ -344,19 +349,24 @@ def GMDSPointsToMesh(VX, DX, MeshY, DY):
 		#Solve the constrained optimization problem to update
 		#ui and ti with all j neq i vertices fixed
 		S = np.zeros((4, 4))
-		S[0:3, 0:3] = As[maxIndex]
+		S[0:3, 0:3] = 2*As[maxIndex]
 		S[0:3, 3] = -1
 		S[3, 0:3] = 1
 		blambda = np.ones(4)
 		blambda[0:3] = -bs[maxIndex].flatten()
 		ulambda = linalg.solve(S, blambda)
 		unew = ulambda[0:3]
+		thisStress = unew.dot(As[maxIndex].dot(unew)) + bs[maxIndex].dot(unew)
+		print "thisStress = %g"%thisStress
 		tnew = int(ts[maxIndex].flatten()[0])
 		triFace = MeshY.faces[tnew]
+		
+		
 		if (unew >= 0).sum() < 3:
+			print "CONSTRAINTS ARE ACTIVE"
 			#The constrained global optimum is outside of the triangle
-			#First search over all edges and find the valid solution 
-			#(if it exists) that contributes to the minimum amount of stress
+			#Search over all edges an vertices to find the valid solution 
+			#that contributes to the minimum amount of stress
 			minStress = np.inf
 			validEdgeFound = False
 			minEdge = [0, 0]
@@ -385,14 +395,6 @@ def GMDSPointsToMesh(VX, DX, MeshY, DY):
 				bary2 = unew[minEdge[1]]
 				edge = MeshY.getEdge(v1, v2)
 				nextFace = edge.faceAcross(triFace)
-				print "edge: %i %i"%(edge.v1.ID, edge.v2.ID)
-				print "triFace: ",
-				for v in triFace.getVertices():
-					print "%i "%v.ID,
-				print "\nnextFace: ",
-				for v in nextFace.getVertices():
-					print "%i "%v.ID,
-				print ""
 				if nextFace: #If this isn't at a boundary
 					tnext = nextFace.ID
 					#Translate the barycentric coordinates to the new face
@@ -412,24 +414,26 @@ def GMDSPointsToMesh(VX, DX, MeshY, DY):
 					tsnew[maxIndex, :] = tnext
 					Anew, bnew = getAandb(DX, DY, MeshY, tsnew, usnew, maxIndex, range(0, NX))
 					grad = (2*Anew.dot(unext) + bnew).flatten()
-					#if vectorInsideTriangleEdge(Vector3D(-grad[0], -grad[1], -grad[2]), edge, nextFace):
-					unew = unext
-					tnew = tnext
-					print "Moving across triangle edge"
+					if vectorInsideTriangleEdge(Vector3D(-grad[0], -grad[1], -grad[2]), edge, nextFace):
+						unew = unext
+						tnew = tnext
+						print "Moving across triangle edge"
 				#Otherwise, keep the point on the edge in the current triangle
-			else:
-				#Search over all of the vertices if no valid edge has been found
-				minStress = np.inf
-				minVertex = 0
-				for i in range(0, 3):
-					thisu = np.zeros(3)
-					thisu[i] = 1
-					thisStress = thisu.dot(As[maxIndex].dot(thisu)) + bs[maxIndex].dot(thisu)
-					if thisStress < minStress:
-						minStress = thisStress
-						minVertex = i
-						unew = thisu
-				minVertex = triFace.getVertices()[minVertex]
+				
+			#Also search over all vertices
+			minVertexIdx = -1
+			for i in range(0, 3):
+				thisu = np.zeros(3)
+				thisu[i] = 1
+				thisStress = thisu.dot(As[maxIndex].dot(thisu)) + bs[maxIndex].dot(thisu)
+				if thisStress < minStress:
+					minStress = thisStress
+					minVertex = i
+					unew = thisu
+			if minVertexIdx >= 0:
+				#If a vertex has been found with stress less than the min stress edge
+				minVertex = triFace.getVertices()[minVertexIdx]
+				print "minVertex = %i"%minVertexIdx
 				#Search for a valid face to translate to, where the negative gradient
 				#points inside of the face
 				for f in minVertex.getAttachedFaces():
@@ -448,27 +452,29 @@ def GMDSPointsToMesh(VX, DX, MeshY, DY):
 					usnew[maxIndex, newi] = 1
 					tsnew[maxIndex] = f.ID
 					Anew, bnew = getAandb(DX, DY, MeshY, tsnew, usnew, maxIndex, range(0, NX))
-					grad = (2*Anew.dot(unext) + bnew).flatten()
+					grad = (2*Anew.dot(unew) + bnew).flatten()
 					if vectorInsideTriangleVertex(Vector3D(-grad[0], -grad[1], -grad[2]), minVertex, f):
 						print "Moving across vertex"
 						unew = usnew[maxIndex, :]
 						tnew = f.ID
 						break
-					
+		
 		#Update the stress matrices of the other coordinates to reflect
 		#the change in this variable
 		usNew = us.copy()
 		usNew[maxIndex, :] = unew
 		tsNew = ts.copy()
 		tsNew[maxIndex] = tnew
-		plotRasterizedStress(As[maxIndex], bs[maxIndex], triFace, MeshY.faces[tnew], us[maxIndex, :].flatten(), unew)
+		#plotRasterizedStress(As[maxIndex], bs[maxIndex], triFace, MeshY.faces[tnew], us[maxIndex, :].flatten(), unew)
 		for i in range(NX):
 			if i == maxIndex:
 				continue
+			#Only update the parts of the sum corresponding to the maxIndex
 			AOld, bOld = getAandb(DX, DY, MeshY, ts, us, i, [maxIndex])
 			ANew, bNew = getAandb(DX, DY, MeshY, tsNew, usNew, i, [maxIndex])
 			As[i] = As[i] - AOld + ANew
 			bs[i] = bs[i] - bOld + bNew
+		#plotRasterizedStressEdges(As[maxIndex], bs[maxIndex], MeshY.faces[tnew], us[maxIndex, :], unew)
 		print "tbefore = %i"%ts[maxIndex].flatten()
 		print "tnew = %i"%tnew
 		print "ubefore = %s"%us[maxIndex, :].flatten()
