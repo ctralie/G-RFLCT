@@ -1,6 +1,7 @@
 from Primitives3D import *
 from Shapes3D import *
 from OpenGL.GL import *
+from OpenGL.arrays import vbo
 from Graphics3D import *
 import sys
 import re
@@ -120,19 +121,27 @@ class MeshFace(object):
 			self.centroid = ret
 		return self.centroid
 
-	def drawFilled(self, drawNormal = True):
+	def drawFilled(self, drawNormal = True, doLighting = True):
 		glBegin(GL_POLYGON)
 		verts = self.getVertices()
 		if drawNormal:
 			normal = self.getNormal()
 			if isinstance(normal, Vector3D):
 				glNormal3f(normal.x, normal.y, normal.z)
+		if doLighting:
+			if verts[0].color:
+				glColorMaterial(GL_FRONT_AND_BACK, GL_AMBIENT_AND_DIFFUSE)
+				glEnable(GL_COLOR_MATERIAL)
+		else:
+			glDisable(GL_LIGHTING)
 		for v in verts:
 			P = v.pos
 			if v.color:
 				glColor3f(v.color[0], v.color[1], v.color[2])
 			glVertex3f(P.x, P.y, P.z)
 		glEnd()
+		if not doLighting:
+			glEnable(GL_LIGHTING)
 	
 	def drawBorder(self):
 		glLineWidth(3)
@@ -235,6 +244,9 @@ def getVertexInCommon(e1, e2):
 class PolyMesh(object):
 	def __init__(self):
 		self.DisplayList = -1
+		self.vertexBuffer = -1
+		self.colorBuffer = -1
+		self.triIndexBuffer = -1
 		self.needsDisplayUpdate = True
 		self.drawFaces = 1
 		self.drawEdges = 0
@@ -794,6 +806,7 @@ class PolyMesh(object):
 			self.loadObjFile(filename)
 		else:
 			print "Unsupported file suffix (%s) for loading mesh"%(suffix, filename)
+		self.needsDisplayUpdate = True
 	
 	def saveFile(self, filename, verbose = False):
 		suffix = re.split("\.", filename)[-1]
@@ -972,7 +985,7 @@ class PolyMesh(object):
 			print "Saved file to %s"%filename
 	
 	#vertexColors is an Nx3 numpy array, where N is the number of vertices
-	def renderGL(self, drawEdges = 0, drawVerts = 0, drawNormals = 0, drawFaces = 1, extraVerts = None ):
+	def renderGL(self, drawEdges = 0, drawVerts = 0, drawNormals = 0, drawFaces = 1, lightingOn = True, extraVerts = None ):
 		if self.drawFaces != drawFaces:
 			self.drawFaces = drawFaces
 			self.needsDisplayUpdate = True
@@ -985,19 +998,14 @@ class PolyMesh(object):
 		if self.drawNormals != drawNormals:
 			self.drawNormals = drawNormals
 			self.needsDisplayUpdate = True
-		
 		if self.needsDisplayUpdate:
 			if self.DisplayList != -1: #Deallocate previous display list
 				glDeleteLists(self.DisplayList, 1)
 			self.DisplayList = glGenLists(1)
 			glNewList(self.DisplayList, GL_COMPILE)
 			if self.drawFaces:
-				#If the faces have color information, don't light them
-				if len(self.vertices) > 0:
-					if self.vertices[0].color:
-						glDisable(GL_LIGHTING)
 				for f in self.faces:
-					f.drawFilled()
+					f.drawFilled(doLighting = lightingOn)
 			if self.drawEdges:
 				glDisable(GL_LIGHTING)
 				glColor3f(0, 0, 1)
@@ -1045,6 +1053,61 @@ class PolyMesh(object):
 			glEnable(GL_LIGHTING)
 			glEndList()
 			self.needsDisplayUpdate = False
+		glCallList(self.DisplayList)
+
+	#vertexColors is an Nx3 numpy array, where N is the number of vertices
+	def renderGLTriBuffers(self):
+		#TODO: Finish this
+		if self.needsDisplayUpdate:
+			if self.vertexBuffer != -1:
+				glDeleteBuffers(1, self.vertexBuffer)
+			if self.colorBuffer != -1:
+				glDeleteBuffers(1, self.colorBuffer)
+			if self.triIndexBuffer != -1:
+				glDeleteBuffers(1, self.triIndexBuffer)
+			
+			#Set up vertex buffer
+			self.vertexBuffer = glGenBuffers(1)
+			glBindBuffer(GL_ARRAY_BUFFER, self.vertexBuffer)
+			self.vertexBufferData = [0]*(3*len(self.vertices))
+			for i in range(len(self.vertices)):
+				P = self.vertices[i].pos
+				self.vertexBufferData[i*3] = P.x
+				self.vertexBufferData[i*3+1] = P.y
+				self.vertexBufferData[i*3+2] = P.z
+			self.vertexBufferData = np.array(self.vertexBufferData, dtype=np.float32)
+			glBufferData(GL_ARRAY_BUFFER, len(self.vertexBufferData), self.vertexBufferData, GL_DYNAMIC_DRAW)
+			
+			#Set up color buffer
+			self.colorBuffer = glGenBuffers(1)
+			glBindBuffer(GL_ARRAY_BUFFER, self.colorBuffer)
+			self.colorBufferData = [0]*(3*len(self.vertices))
+			for i in range(len(self.vertices)):
+				C = [0.0, 0.0, 0.0]
+				if self.vertices[i].color:
+					C = self.vertices[i].color
+				self.colorBufferData[i*3:(i+1)*3] = C
+			self.colorBufferData = np.array(self.colorBufferData, dtype=np.float32)
+			glBufferData(GL_ARRAY_BUFFER, len(self.colorBufferData), self.colorBufferData, GL_DYNAMIC_DRAW)
+			
+			#Set up the triangle buffer
+			self.triIndexBuffer = glGenBuffers(1)
+			glBindBuffer(GL_ARRAY_BUFFER, self.triIndexBuffer)
+			self.triBufferData = [0]*(3*len(self.faces))
+			for i in range(len(self.faces)):
+				Vs = [V.ID for V in self.faces[i].getVertices()]
+				self.triBufferData[i*3:(i+1)*3] = Vs
+			self.triBufferData = np.array(self.triBufferData)
+			self.needsDisplayUpdate = False
+		
+		glDisable(GL_LIGHTING)
+		glBindBuffer(GL_ARRAY_BUFFER, self.vertexBuffer)
+		glVertexPointer(3, GL_FLOAT, 12, self.vertexBuffer)
+		glBindBuffer(GL_COLOR_BUFFER, self.colorBuffer)
+		glColorPointer(3, GL_FLOAT, 12, self.colorBuffer)
+		glBindBuffer(GL_VERTEX_ARRAY, self.triIndexBuffer)
+		
+		glEnable(GL_LIGHTING)
 		glCallList(self.DisplayList)
 	
 	def renderCCWEdgesDebug(self):

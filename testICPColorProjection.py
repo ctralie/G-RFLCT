@@ -210,17 +210,17 @@ class MeshViewerCanvas(glcanvas.GLCanvas):
 		if self.savingMovie and self.movieIter >= len(self.transformations):
 			if self.movieIter < len(self.transformations) + 15:
 				if self.mesh3:
-					self.mesh3.renderGL(self.displayMeshEdges, self.displayMeshVertices, self.displayMeshNormals, self.displayMeshFaces, None)
+					self.mesh3.renderGL(self.displayMeshEdges, self.displayMeshVertices, self.displayMeshNormals, self.displayMeshFaces, True, None)
 			elif self.movieIter < len(self.transformations) + 30:
-				self.mesh2.renderGL(self.displayMeshEdges, self.displayMeshVertices, self.displayMeshNormals, self.displayMeshFaces, None)
+				self.mesh2.renderGL(self.displayMeshEdges, self.displayMeshVertices, self.displayMeshNormals, self.displayMeshFaces, True, None)
 			elif self.movieIter < len(self.transformations) + 45:
 				if self.mesh3:
-					self.mesh3.renderGL(self.displayMeshEdges, self.displayMeshVertices, self.displayMeshNormals, self.displayMeshFaces, None)
+					self.mesh3.renderGL(self.displayMeshEdges, self.displayMeshVertices, self.displayMeshNormals, self.displayMeshFaces, True, None)
 			elif self.movieIter < len(self.transformations) + 60:
-				self.mesh2.renderGL(self.displayMeshEdges, self.displayMeshVertices, self.displayMeshNormals, self.displayMeshFaces, None)
+				self.mesh2.renderGL(self.displayMeshEdges, self.displayMeshVertices, self.displayMeshNormals, self.displayMeshFaces, True, None)
 			elif self.movieIter < len(self.transformations) + 75:
 				if self.mesh3:
-					self.mesh3.renderGL(self.displayMeshEdges, self.displayMeshVertices, self.displayMeshNormals, self.displayMeshFaces, None)
+					self.mesh3.renderGL(self.displayMeshEdges, self.displayMeshVertices, self.displayMeshNormals, self.displayMeshFaces, True, None)
 			else:
 				self.savingMovie = False
 				os.popen3("ffmpeg -f image2 -r 4 -i COLOR%d.png -r 4 COLOR.ogg")
@@ -231,10 +231,10 @@ class MeshViewerCanvas(glcanvas.GLCanvas):
 			if self.mesh1:
 				glPushMatrix()
 				glMultMatrixd(transform.transpose().flatten())
-				self.mesh1.renderGL(self.displayMeshEdges, self.displayMeshVertices, self.displayMeshNormals, self.displayMeshFaces, None)
+				self.mesh1.renderGL(self.displayMeshEdges, self.displayMeshVertices, self.displayMeshNormals, self.displayMeshFaces, True, None)
 				glPopMatrix()
 			if self.mesh2:
-				self.mesh2.renderGL(self.displayMeshEdges, self.displayMeshVertices, self.displayMeshNormals, self.displayMeshFaces, None)
+				self.mesh2.renderGL(self.displayMeshEdges, self.displayMeshVertices, self.displayMeshNormals, self.displayMeshFaces, True, None)
 		self.SwapBuffers()
 		
 		if self.savingMovie:

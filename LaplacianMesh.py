@@ -142,7 +142,7 @@ class LaplacianMesh(PolyMesh):
 		g = np.zeros((len(constraints), 3))
 		for i in range(len(constraints)):
 			(index, P) = constraints[i]
-			constraintsToPass.append([index, 1])
+			constraintsToPass.append([(index, 1)])
 			g[i] = [P.x, P.y, P.z]
 		newPos = self.solveFunctionWithConstraints(constraintsToPass, deltaCoords, g)
 		for i in range(N):

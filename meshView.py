@@ -133,6 +133,10 @@ class MeshViewerCanvas(glcanvas.GLCanvas):
 			self.mesh.starTriangulate() #TODO: This is a patch to deal with "non-planar faces" added
 			self.Refresh()
 
+	def deleteConnectedComponents(self, evt):
+		if self.mesh:
+			self.mesh.deleteAllButLargestConnectedComponent()
+			
 	def FillHoles(self, evt):
 		self.mesh.fillHoles()
 		self.mesh.needsDisplayUpdate = True
@@ -216,7 +220,7 @@ class MeshViewerCanvas(glcanvas.GLCanvas):
 		glMaterialfv(GL_FRONT_AND_BACK, GL_SHININESS, 64)
 		
 		if self.mesh:
-			self.mesh.renderGL(self.displayMeshEdges, self.displayMeshVertices, self.displayMeshNormals, self.displayMeshFaces, None)
+			self.mesh.renderGL(self.displayMeshEdges, self.displayMeshVertices, self.displayMeshNormals, self.displayMeshFaces, True, None)
 			if self.displayPrincipalAxes:
 				(Axis1, Axis2, Axis3, maxProj, minProj, axes)	= self.meshPrincipalAxes
 				C = self.meshCentroid
@@ -379,6 +383,12 @@ class MeshViewerFrame(wx.Frame):
 		self.Bind(wx.EVT_BUTTON, self.glcanvas.CutWithPlane, CutWithPlaneButton)
 		self.rightPanel.Add(CutWithPlaneButton)
 
+		#Buttons for filling holes
+		self.rightPanel.Add(wx.StaticText(self, label="Connected Components"), 0, wx.EXPAND)
+		ConnectedComponentsButton = wx.Button(self, -1, "Delete All But Largest Connected Component")
+		self.Bind(wx.EVT_BUTTON, self.glcanvas.deleteConnectedComponents, ConnectedComponentsButton)
+		self.rightPanel.Add(ConnectedComponentsButton)		
+		
 		#Buttons for filling holes
 		self.rightPanel.Add(wx.StaticText(self, label="Fill Holes"), 0, wx.EXPAND)
 		FillHolesButton = wx.Button(self, -1, "Fill Holes")
