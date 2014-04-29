@@ -182,7 +182,8 @@ def transplantColorsLaplacianUsingBarycentric(TargetMesh, CX, tx, ux):
 	deltaCoords = np.zeros((len(NewMesh.vertices), 3))
 	CY = NewMesh.solveFunctionWithConstraints(constraints, deltaCoords, g)
 	#Make sure colors don't go above 1
-	CY[CY > 1] = 1
+	#CY[CY > 1] = 1
+	CY = CY - CY.min()
 	CY = CY/CY.max()
 	#Copy colors over
 	for i in range(0, CY.shape[0]):
@@ -238,7 +239,8 @@ def transplantColorsLaplacianUsingBarycentricSubdivision(TargetMesh, CX, tx, ux)
 	deltaCoords = np.zeros((len(NewMesh.vertices), 3))
 	CY = NewMesh.solveFunctionWithConstraints(constraints, deltaCoords, g)
 	#Make sure colors don't go above 1
-	CY[CY > 1] = 1
+	#CY[CY > 1] = 1
+	CY = CY - CY.min()
 	CY = CY/CY.max()
 	#Copy colors over
 	for i in range(0, CY.shape[0]):

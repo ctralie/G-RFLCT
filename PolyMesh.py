@@ -122,6 +122,8 @@ class MeshFace(object):
 		return self.centroid
 
 	def drawFilled(self, drawNormal = True, doLighting = True):
+		if not doLighting:
+			glEnable(GL_LIGHTING)
 		glBegin(GL_POLYGON)
 		verts = self.getVertices()
 		if drawNormal:
@@ -132,6 +134,7 @@ class MeshFace(object):
 			if verts[0].color:
 				glColorMaterial(GL_FRONT_AND_BACK, GL_AMBIENT_AND_DIFFUSE)
 				glEnable(GL_COLOR_MATERIAL)
+			var = 1
 		else:
 			glDisable(GL_LIGHTING)
 		for v in verts:
@@ -140,8 +143,6 @@ class MeshFace(object):
 				glColor3f(v.color[0], v.color[1], v.color[2])
 			glVertex3f(P.x, P.y, P.z)
 		glEnd()
-		if not doLighting:
-			glEnable(GL_LIGHTING)
 	
 	def drawBorder(self):
 		glLineWidth(3)
