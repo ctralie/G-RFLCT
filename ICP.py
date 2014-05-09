@@ -9,7 +9,7 @@ import numpy.linalg as linalg
 import scipy.spatial as spatial
 
 ICP_MAXITER = 100
-ICP_NPOINTSAMPLES = 500
+ICP_NPOINTSAMPLES = 1000
 
 def getRigidTransformationSVD(Points, TargetPoints):
 	P = Points.copy()

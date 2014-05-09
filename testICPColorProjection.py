@@ -219,7 +219,7 @@ class MeshViewerCanvas(glcanvas.GLCanvas):
 			elif self.movieIter < len(self.transformations) + 60:
 				self.mesh2.renderGL(self.displayMeshEdges, self.displayMeshVertices, self.displayMeshNormals, self.displayMeshFaces, True, None)
 			elif self.movieIter < len(self.transformations) + 75:
-				if self.movieIter == 60:
+				if self.movieIter == len(self.transformations) + 60:
 					self.mesh3.needsDisplayUpdate = True
 				if self.mesh3:
 					self.mesh3.renderGL(self.displayMeshEdges, self.displayMeshVertices, self.displayMeshNormals, self.displayMeshFaces, False, None)
@@ -264,7 +264,7 @@ class MeshViewerCanvas(glcanvas.GLCanvas):
 					ts, us = getInitialGuessClosestPoints(VX, self.mesh2)
 					print "Finished initial guess of point positions"
 					self.mesh3 = transplantColorsLaplacianUsingBarycentric(self.mesh2, CX, ts, us)
-					self.mesh3 = transplantColorsLaplacianUsingDelaunay(self.mesh2, CX, ts, us)
+					#self.mesh3 = transplantColorsLaplacianUsingDelaunay(self.mesh2, CX, ts, us)
 			self.movieIter = self.movieIter + 1
 			self.Refresh()
 	

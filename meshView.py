@@ -311,7 +311,7 @@ class MeshViewerCanvas(glcanvas.GLCanvas):
 		self.Refresh()
 
 class MeshViewerFrame(wx.Frame):
-	(ID_LOADDATASET, ID_SAVEDATASET, ID_SAVESCREENSHOT) = (1, 2, 3)
+	(ID_LOADDATASET, ID_SAVEDATASET, ID_SAVEDATASETMETERS, ID_SAVESCREENSHOT) = (1, 2, 3, 4)
 	
 	def __init__(self, parent, id, title, pos=DEFAULT_POS, size=DEFAULT_SIZE, style=wx.DEFAULT_FRAME_STYLE, name = 'GLWindow'):
 		style = style | wx.NO_FULL_REPAINT_ON_RESIZE
@@ -328,6 +328,8 @@ class MeshViewerFrame(wx.Frame):
 		self.Bind(wx.EVT_MENU, self.OnLoadMesh, menuOpenMesh)
 		menuSaveMesh = filemenu.Append(MeshViewerFrame.ID_SAVEDATASET, "&Save Mesh", "Save the edited polygon mesh")
 		self.Bind(wx.EVT_MENU, self.OnSaveMesh, menuSaveMesh)
+		menuSaveMeshMeters = filemenu.Append(MeshViewerFrame.ID_SAVEDATASET, "&Save Mesh in Meters", "Save the edited polygon mesh; convert from millimeters to meters")
+		self.Bind(wx.EVT_MENU, self.OnSaveMeshMeters, menuSaveMeshMeters)
 		menuSaveScreenshot = filemenu.Append(MeshViewerFrame.ID_SAVESCREENSHOT, "&Save Screenshot", "Save a screenshot of the GL Canvas")
 		self.Bind(wx.EVT_MENU, self.OnSaveScreenshot, menuSaveScreenshot)
 		menuExit = filemenu.Append(wx.ID_EXIT,"E&xit"," Terminate the program")
@@ -454,6 +456,19 @@ class MeshViewerFrame(wx.Frame):
 		dlg.Destroy()
 		return
 
+	def OnSaveMeshMeters(self, evt):
+		for V in self.glcanvas.mesh.vertices:
+			V.pos = 0.001*V.pos
+		dlg = wx.FileDialog(self, "Choose a file", ".", "", "*", wx.SAVE)
+		if dlg.ShowModal() == wx.ID_OK:
+			filename = dlg.GetFilename()
+			dirname = dlg.GetDirectory()
+			filepath = os.path.join(dirname, filename)
+			self.glcanvas.mesh.saveFile(filepath, True)
+			self.glcanvas.Refresh()
+		dlg.Destroy()
+		return		
+		
 	def OnSaveScreenshot(self, evt):
 		dlg = wx.FileDialog(self, "Choose a file", ".", "", "*", wx.SAVE)
 		if dlg.ShowModal() == wx.ID_OK:

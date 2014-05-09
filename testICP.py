@@ -141,7 +141,7 @@ class MeshViewerCanvas(glcanvas.GLCanvas):
 	
 	def doICP(self, evt):
 		if self.mesh1 and self.mesh2:
-			AllTransformations, minIndex, error = ICP_MeshToMesh(self.mesh1, self.mesh2)
+			AllTransformations, minIndex, error = ICP_MeshToMesh(self.mesh1, self.mesh2, verbose = True)
 			self.transformations = AllTransformations[minIndex]
 			self.savingMovie = True
 			self.movieIter = 0

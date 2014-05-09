@@ -185,6 +185,7 @@ def transplantColorsLaplacianUsingBarycentric(TargetMesh, CX, tx, ux):
 	#CY[CY > 1] = 1
 	CY = CY - CY.min()
 	CY = CY/CY.max()
+	CY[(CY[:, 0] > 0.6) * (CY[:, 2] > 0.6), :] = 0.5
 	#Copy colors over
 	for i in range(0, CY.shape[0]):
 		C = CY[i, :]
