@@ -63,6 +63,10 @@ class MeshViewerCanvas(glcanvas.GLCanvas):
 		self.unionbbox = BBox3D()
 		random.seed()
 		
+		#State variables for saving screenshots
+		self.savingRotScreenshots = False
+		self.rotAngle = 0
+		
 		#Face mesh variables and manipulation variables
 		self.mesh = None
 		self.meshCentroid = None
@@ -72,6 +76,7 @@ class MeshViewerCanvas(glcanvas.GLCanvas):
 		self.displayMeshVertices = False
 		self.displayMeshNormals = False
 		self.displayPrincipalAxes = False
+		self.useLighting = True
 		self.vertexColors = np.zeros(0)
 		
 		self.cutPlane = None
@@ -126,12 +131,24 @@ class MeshViewerCanvas(glcanvas.GLCanvas):
 	def displayPrincipalAxesCheckbox(self, evt):
 		self.displayPrincipalAxes = evt.Checked()
 		self.Refresh()
+
+	def useLightingCheckbox(self, evt):
+		self.useLighting = evt.Checked()
+		self.mesh.needsDisplayUpdate = True
+		self.Refresh()
 	
 	def CutWithPlane(self, evt):
 		if self.cutPlane:
 			self.mesh.sliceBelowPlane(self.cutPlane, False)
 			self.mesh.starTriangulate() #TODO: This is a patch to deal with "non-planar faces" added
 			self.Refresh()
+
+	def saveAutoRotatingScreenshots(self, evt):
+		self.savingRotScreenshots = True
+		self.rotAngle = -80
+		self.camera.centerOnBBox(self.bbox, theta = -math.pi/2, phi = math.pi/2)
+		self.zCenter = (self.bbox.zmax + self.bbox.zmin) / 2.0
+		self.Refresh()
 
 	def deleteConnectedComponents(self, evt):
 		if self.mesh:
@@ -219,8 +236,21 @@ class MeshViewerCanvas(glcanvas.GLCanvas):
 		glMaterialfv(GL_FRONT_AND_BACK, GL_SPECULAR, [0.2, 0.2, 0.2, 1.0])
 		glMaterialfv(GL_FRONT_AND_BACK, GL_SHININESS, 64)
 		
+		if self.savingRotScreenshots:
+			glTranslatef(0, 0, self.zCenter)
+			glRotatef(self.rotAngle, 0, 1, 0)
+			glTranslatef(0, 0, -self.zCenter)
+			self.mesh.renderGL(self.displayMeshEdges, self.displayMeshVertices, self.displayMeshNormals, self.displayMeshFaces, self.useLighting, None)
+			saveImageGL(self, "%s%i.png"%(self.rotFilePrefixCtrl.GetLineText(0), self.rotAngle))
+			self.rotAngle = self.rotAngle + 5
+			if self.rotAngle > 80:
+				self.savingRotScreenshots = False
+			self.SwapBuffers()
+			self.Refresh()
+			return
+		
 		if self.mesh:
-			self.mesh.renderGL(self.displayMeshEdges, self.displayMeshVertices, self.displayMeshNormals, self.displayMeshFaces, True, None)
+			self.mesh.renderGL(self.displayMeshEdges, self.displayMeshVertices, self.displayMeshNormals, self.displayMeshFaces, self.useLighting, None)
 			if self.displayPrincipalAxes:
 				(Axis1, Axis2, Axis3, maxProj, minProj, axes)	= self.meshPrincipalAxes
 				C = self.meshCentroid
@@ -261,7 +291,7 @@ class MeshViewerCanvas(glcanvas.GLCanvas):
 			cutPlaneMesh = getRectMesh(P0 + t + u, P0 + t - u, P0 - t - u, P0 - t + u)
 			glDisable(GL_LIGHTING)
 			glColor3f(0, 1, 0)
-			cutPlaneMesh.renderGL()
+			cutPlaneMesh.renderGL(lightingOn = False)
 			self.cutPlane = Plane3D(P0, r)
 		
 		self.SwapBuffers()
@@ -374,6 +404,10 @@ class MeshViewerFrame(wx.Frame):
 		self.displayPrincipalAxesCheckbox.SetValue(False)
 		self.Bind(wx.EVT_CHECKBOX, self.glcanvas.displayPrincipalAxesCheckbox, self.displayPrincipalAxesCheckbox)
 		self.rightPanel.Add(self.displayPrincipalAxesCheckbox, 0, wx.EXPAND)
+		self.useLightingCheckbox = wx.CheckBox(self, label = "Use Lighting")
+		self.useLightingCheckbox.SetValue(True)
+		self.Bind(wx.EVT_CHECKBOX, self.glcanvas.useLightingCheckbox, self.useLightingCheckbox)
+		self.rightPanel.Add(self.useLightingCheckbox, 0, wx.EXPAND)
 
 		#Checkboxes and buttons for manipulating the cut plane
 		self.rightPanel.Add(wx.StaticText(self, label="Cutting Plane"), 0, wx.EXPAND)
@@ -385,25 +419,33 @@ class MeshViewerFrame(wx.Frame):
 		self.Bind(wx.EVT_BUTTON, self.glcanvas.CutWithPlane, CutWithPlaneButton)
 		self.rightPanel.Add(CutWithPlaneButton)
 
-		#Buttons for filling holes
+		#Button and text area for saving the rotating mesh
+		self.rightPanel.Add(wx.StaticText(self, label="Save Auto Rotating Screenshots"), 0, wx.EXPAND)
+		self.glcanvas.rotFilePrefixCtrl = wx.TextCtrl(self, -1, "Rotations")
+		self.rightPanel.Add(self.glcanvas.rotFilePrefixCtrl)
+		SaveAutoRotatingScreenshotsButton = wx.Button(self, -1, "Save Auto Rotating Screenshots")
+		self.Bind(wx.EVT_BUTTON, self.glcanvas.saveAutoRotatingScreenshots, SaveAutoRotatingScreenshotsButton )
+		self.rightPanel.Add(SaveAutoRotatingScreenshotsButton )
+
+		#Button for deleting all but largest connected component
 		self.rightPanel.Add(wx.StaticText(self, label="Connected Components"), 0, wx.EXPAND)
 		ConnectedComponentsButton = wx.Button(self, -1, "Delete All But Largest Connected Component")
 		self.Bind(wx.EVT_BUTTON, self.glcanvas.deleteConnectedComponents, ConnectedComponentsButton)
 		self.rightPanel.Add(ConnectedComponentsButton)		
 		
-		#Buttons for filling holes
+		#Button for filling holes
 		self.rightPanel.Add(wx.StaticText(self, label="Fill Holes"), 0, wx.EXPAND)
 		FillHolesButton = wx.Button(self, -1, "Fill Holes")
 		self.Bind(wx.EVT_BUTTON, self.glcanvas.FillHoles, FillHolesButton)
 		self.rightPanel.Add(FillHolesButton)
 		
-		#Buttons for computing geodesic distance
+		#Button for computing geodesic distance
 		self.rightPanel.Add(wx.StaticText(self, label="Geodesic Distances"), 0, wx.EXPAND)
 		ComputeGeodesicButton = wx.Button(self, -1, "Compute Geodesic Distances")
 		self.Bind(wx.EVT_BUTTON, self.glcanvas.ComputeGeodesicDistances, ComputeGeodesicButton)
 		self.rightPanel.Add(ComputeGeodesicButton)
 		
-		#Buttons for interpolating colors
+		#Button for interpolating colors
 		self.rightPanel.Add(wx.StaticText(self, label="Colors"), 0, wx.EXPAND)
 		InterpolateRandomColorsButton = wx.Button(self, -1, "Interpolate Random Colors")
 		self.Bind(wx.EVT_BUTTON, self.glcanvas.InterpolateRandomColors, InterpolateRandomColorsButton)

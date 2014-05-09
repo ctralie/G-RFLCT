@@ -127,13 +127,13 @@ class MeshFace(object):
 				normal = self.getNormal()
 				if isinstance(normal, Vector3D):
 					glNormal3f(normal.x, normal.y, normal.z)
-		glBegin(GL_POLYGON)
 		verts = self.getVertices()
 		if doLighting:
 			if verts[0].color:
 				glColorMaterial(GL_FRONT_AND_BACK, GL_AMBIENT_AND_DIFFUSE)
 				glEnable(GL_COLOR_MATERIAL)
 			var = 1
+		glBegin(GL_POLYGON)
 		for v in verts:
 			P = v.pos
 			if v.color:
