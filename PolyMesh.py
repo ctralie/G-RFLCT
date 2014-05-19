@@ -1279,6 +1279,64 @@ def getOctahedronMesh():
 	mesh.addFace([v6, v4, v1])
 	return mesh
 
+def getIcosahedronMesh():
+	mesh = PolyMesh()
+	phi = (1+math.sqrt(5))/2
+	#Use the unit cube to help construct the icosahedron
+	#Front cube face vertices
+	FL = mesh.addVertex(Point3D(-0.5, 0, phi/2))
+	FR = mesh.addVertex(Point3D(0.5, 0, phi/2))
+	#Back cube face vertices
+	BL = mesh.addVertex(Point3D(-0.5, 0, -phi/2))
+	BR = mesh.addVertex(Point3D(0.5, 0, -phi/2))
+	#Top cube face vertices
+	TF = mesh.addVertex(Point3D(0, phi/2, 0.5))
+	TB = mesh.addVertex(Point3D(0, phi/2, -0.5))
+	#Bottom cube face vertices
+	BF = mesh.addVertex(Point3D(0, -phi/2, 0.5))
+	BB = mesh.addVertex(Point3D(0, -phi/2, -0.5))
+	#Left cube face vertices
+	LT = mesh.addVertex(Point3D(-phi/2, 0.5, 0))
+	LB = mesh.addVertex(Point3D(-phi/2, -0.5, 0))
+	#Right cube face vertices
+	RT = mesh.addVertex(Point3D(phi/2, 0.5, 0))
+	RB = mesh.addVertex(Point3D(phi/2, -0.5, 0))
+	
+	#Add the icosahedron faces associated with each cube face
+	#Front cube face faces
+	mesh.addFace([TF, FL, FR])
+	mesh.addFace([BF, FR, FL])
+	#Back cube face faces
+	mesh.addFace([TB, BR, BL])
+	mesh.addFace([BB, BL, BR])
+	#Top cube face faces
+	mesh.addFace([TB, TF, RT])
+	mesh.addFace([TF, TB, LT])
+	#Bottom cube face faces
+	mesh.addFace([BF, BB, RB])
+	mesh.addFace([BB, BF, LB])
+	#Left cube face faces
+	mesh.addFace([LB, LT, BL])
+	mesh.addFace([LT, LB, FL])
+	#Right cube face faces
+	mesh.addFace([RT, RB, BR])
+	mesh.addFace([RB, RT, FR])
+	
+	#Add the icosahedron faces associated with each cube vertex
+	#Front of cube
+	mesh.addFace([FL, TF, LT]) #Top left corner
+	mesh.addFace([BF, LB, FL]) #Bottom left corner
+	mesh.addFace([FR, RT, TF]) #Top right corner
+	mesh.addFace([BF, RB, FR]) #Bottom right corner
+	#Back of cube
+	mesh.addFace([LT, TB, BL]) #Top left corner
+	mesh.addFace([BL, LB, BB]) #Bottom left corner
+	mesh.addFace([RT, BR, TB]) #Top right corner
+	mesh.addFace([BB, RB, BR]) #Bottom right corner
+	
+	return mesh
+	
+
 def getHemiOctahedronMesh():
 	mesh = PolyMesh()
 	v1 = mesh.addVertex(Point3D(0, 0, 1))
@@ -1332,5 +1390,5 @@ if __name__ == '__main__2':
 		print v.ID, " ",
 
 if __name__ == '__main__':
-	sphereMesh = getSphereMesh(1, 2)
-	sphereMesh.saveOffFile('sphere.off')
+	icosahedronMesh = getIcosahedronMesh()
+	icosahedronMesh.saveOffFile('icosahedron.off')	
