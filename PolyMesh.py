@@ -1335,7 +1335,25 @@ def getIcosahedronMesh():
 	mesh.addFace([BB, RB, BR]) #Bottom right corner
 	
 	return mesh
-	
+
+def getDodecahedronMesh():
+	#Use icosahedron dual to help construct this
+	icosa = getIcosahedronMesh()
+	mesh = PolyMesh()
+	#Add the vertex associated with each icosahedron face
+	for f in icosa.faces:
+		f.V = mesh.addVertex(f.getCentroid())
+	#Add the face associated with each icosahedron vertex
+	for v in icosa.vertices:
+		verts = [f.V for f in v.getAttachedFaces()]
+		vertsP = [V.pos.getVector() for V in verts]
+		comparator = PointsCCWComparator(Vector3D(0, 0, 0), vertsP[0])
+		for i in range(0, len(verts)):
+			vertsP[i].V = verts[i]
+		#Sort vertices in CCW order
+		verts = [x.V for x in sorted(vertsP, cmp=comparator.compare)]
+		mesh.addFace(verts)
+	return mesh
 
 def getHemiOctahedronMesh():
 	mesh = PolyMesh()
@@ -1390,5 +1408,5 @@ if __name__ == '__main__2':
 		print v.ID, " ",
 
 if __name__ == '__main__':
-	icosahedronMesh = getIcosahedronMesh()
-	icosahedronMesh.saveOffFile('icosahedron.off')	
+	icosahedronMesh = getDodecahedronMesh()
+	icosahedronMesh.saveOffFile('dodecahedron.off')	

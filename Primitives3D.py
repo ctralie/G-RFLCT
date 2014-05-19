@@ -166,6 +166,24 @@ class Point3D(object):
 	def __str__(self):
 		return "Point3D(%g, %g, %g)"%(self.x, self.y, self.z)
 
+class PointsCCWComparator(object):
+	def __init__(self, C, VFirst):
+		self.C = C #Center of reference for comparison
+		self.VFirst = VFirst #First vertex in polygon
+		self.N = VFirst - C #Normal direction
+		self.N.normalize()
+	
+	def compare(self, V1, V2):
+		a = V1 - self.VFirst
+		b = V2 - self.VFirst
+		triNormal = a % b
+		dot = triNormal.Dot(self.N)
+		if dot > 0:
+			return 1
+		elif dot == 0:
+			return 0
+		return -1
+
 class Matrix4(object):
 	def __init__(self, args = []):
 		if len(args) > 0: #Matrix specified in row-major order in argument

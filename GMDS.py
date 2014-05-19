@@ -97,9 +97,9 @@ def getInitialGuessClosestPoints(VX, MeshY):
 		Axis1.normalize()
 		Axis2.normalize()
 		A = Point3D(0, 0, 0)
-		B = Point3D(Axis1.proj(Vs[1] - Vs[0]).Length(), Axis2.proj(Vs[1] - Vs[0]).Length(), 0)
-		C = Point3D(Axis1.proj(Vs[2] - Vs[0]).Length(), Axis2.proj(Vs[2] - Vs[0]).Length(), 0)
-		X = Point3D(Axis1.proj(closestPoint - Vs[0]).Length(), Axis2.proj(closestPoint - Vs[0]).Length(), 0)
+		B = Point3D(Axis1.Dot(Vs[1] - Vs[0]), Axis2.Dot(Vs[1] - Vs[0]), 0)
+		C = Point3D(Axis1.Dot(Vs[2] - Vs[0]), Axis2.Dot(Vs[2] - Vs[0]), 0)
+		X = Point3D(Axis1.Dot(closestPoint - Vs[0]), Axis2.Dot(closestPoint - Vs[0]), 0)
 		us[i, :] = getBarycentricCoords(A, B, C, X, False) #Due to numerical precision skip the validity check;
 		if us[i, :].sum() > 3:
 			for V in Vs:
@@ -193,10 +193,10 @@ def vectorInsideTriangleVertex(vec, v1, face):
 	Axis2 = Axis1.projPerp(vec2)
 	Axis1.normalize()
 	Axis2.normalize()
-	u = Axis1.proj(vec).Length()
-	v = Axis2.proj(vec).Length()
-	u2 = Axis1.proj(vec2).Length()
-	v2 = Axis2.proj(vec2).Length()
+	u = Axis1.Dot(vec)
+	v = Axis2.Dot(vec)
+	u2 = Axis1.Dot(vec2)
+	v2 = Axis2.Dot(vec2)
 	det1 = np.zeros((3, 3))
 	det1[0, :] = np.array([1, 0, 0])
 	det1[1, :] = np.array([1, 1, 0])
