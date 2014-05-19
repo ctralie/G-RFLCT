@@ -171,7 +171,6 @@ class PointsCCWComparator(object):
 		self.C = C #Center of reference for comparison
 		self.VFirst = VFirst #First vertex in polygon
 		self.N = VFirst - C #Normal direction
-		self.N.normalize()
 	
 	def compare(self, V1, V2):
 		a = V1 - self.VFirst

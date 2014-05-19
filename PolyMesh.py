@@ -8,6 +8,25 @@ import re
 import numpy as np
 import numpy.linalg as linalg
 
+#Used to help sort edges in CCW order
+class EdgesCCWComparator(object):
+	def __init__(self, VCenter, N):
+		self.VCenter = VCenter #Common point of all edges
+		self.N = N
+	
+	def compare(self, e1, e2):
+		V1 = e1.vertexAcross(self.VCenter)
+		V2 = e2.vertexAcross(self.VCenter)
+		a = V1.pos - self.VCenter.pos
+		b = V2.pos - self.VCenter.pos
+		triNormal = a % b
+		dot = triNormal.Dot(self.N)
+		if dot > 0:
+			return 1
+		elif dot == 0:
+			return 0
+		return -1
+
 class MeshVertex(object):
 	def __init__(self, P, ID):
 		self.pos = P
@@ -51,26 +70,8 @@ class MeshVertex(object):
 	#Sort the edges so that they are in CCW order when projected onto
 	#the plane defined by the vertex's normal
 	def getCCWSortedEdges(self):
-		n = self.getNormal()
-		#Store an extra field, vec, in each edge that represents
-		#the normalized vector along the edge starting at this vertex
-		e0 = None
-		for e in self.edges:
-			e.vec = e.vertexAcross(self).pos - self.pos
-			e.vec = n.projPerp(e.vec)
-			e.vec.normalize()
-			e0 = e
-		#Put all vectors in the xy plane
-		v = e0.vec
-		w = v%n
-		B = Matrix4([v.x, v.y, v.z, 0, w.x, w.y, w.z, 0, n.x, n.y, n.z, 0, 0, 0, 0, 1])
-		B = B.Inverse()
-		for e in self.edges:
-			e.vec = B*e.vec
-		#Perform the sorting by CCW angle made with (1, 0) in the xy plane
-		def getAngle(e):
-			return math.atan2(e.vec.y, e.vec.x)
-		return sorted(self.edges, key=getAngle)
+		comparator = EdgesCCWComparator(self, self.getNormal())
+		return sorted(self.edges, cmp = comparator.compare)
 
 class MeshFace(object):
 	def __init__(self, ID):
@@ -466,10 +467,8 @@ class PolyMesh(object):
 	def truncate(self, t):
 		choppedVertices = list(self.vertices)
 		choppedFaces = list(self.faces)
-		for f in choppedFaces:
-			f.vertexMap = {}
-		#Create all of the new vertices that result from chopping off
-		#the top of the pyramid, and make a list of new faces
+		#Truncate each vertex in the original list of vertices one at a time
+		i = 0
 		for v in choppedVertices:
 			edges = v.getCCWSortedEdges()
 			newVerts = [0]*len(edges)
@@ -480,6 +479,7 @@ class PolyMesh(object):
 				newPos = v.pos + t*(v2.pos-v.pos)
 				newVerts[i] = self.addVertex(newPos)
 			#Now create the faces around the base of the pyramid
+			facesToRemove = []
 			for i in range(0, len(edges)):
 				[e1, e2] = [edges[i], edges[(i+1)%len(edges)]]
 				[v1, v2] = [newVerts[i], newVerts[(i+1)%len(newVerts)]]
@@ -487,31 +487,50 @@ class PolyMesh(object):
 				if face == None:
 					#If there is a hole in between the edges, skip this
 					continue
-				face.vertexMap[v] = [v2, v1] #CCW is the opposite way across an edge
+				face.topVertices = [v2, v1] #CCW is the opposite way across an edge
+				face.originalEdges = [e1, e2]
+				facesToRemove.append(face)
 			#Add the face that fills the chopped off region
 			self.addFace(newVerts)
-		#Now update all of the topology with the following steps:
-		#1) Remove the outdated faces
-		for f in choppedFaces:
-			self.removeFace(f)
-		#2) Remove the outdated edges coming out of the chopped vertices
-		#and then remove the chopped vertices themselves
-		for v in choppedVertices:
-			for e in list(v.edges):
+			#Remove the faces that have now been chopped
+			for f in facesToRemove:
+				self.removeFace(f)
+			#Remove the edges associated with the chopped faces
+			for e in edges:
 				self.removeEdge(e)
-			self.removeVertex(v)
-		#3) Add back the original faces around the base of each pyramid
-		#with the appropriate substitutions
-		for f in choppedFaces:
-			newFace = []
-			thisV = f.startV
-			for i in range(0, len(f.edges)):
-				newVerts = f.vertexMap[thisV]
-				newFace.append(newVerts[0])
-				newFace.append(newVerts[1])
-				thisV = f.edges[i].vertexAcross(thisV)
-			if len(newFace) > 0:
-				self.addFace(newFace)
+			#Remove the vertex at the tip
+				self.removeVertex(v)
+			#Update the faces that have been removed with the three new edges replacing
+			#the original two and add them back
+			for f in facesToRemove:
+				#Find the location of the original two edges in the face edge list
+				#and remove them
+				N = f.getVertices()
+				newEdges = []
+				for k in range(0, len(f.edges)):
+					e = f.edges[k]
+					[e1, e2] = f.originalEdges
+					if e == e1 or e == e2:
+						newEdges = f.edges[0:k] + f.edges[k+2:]
+						break
+				newVerts = set([])
+				for e in newEdges:
+					newVerts.add(e.v1)
+					newVerts.add(e.v2)
+				newVerts.add(f.topVertices[0])
+				newVerts.add(f.topVertices[1])
+				newVerts = list(newVerts)
+				vertsP = [Vector3D(nV.pos.x, nV.pos.y, nV.pos.z) for nV in newVerts]
+				comparator = PointsCCWComparator(Vector3D(0, 0, 0), vertsP[0])
+				comparator.N = f.getNormal()
+				for i in range(0, len(newVerts)):
+					vertsP[i].V = newVerts[i]
+				#Sort vertices in CCW order
+				newVerts = [x.V for x in sorted(vertsP, cmp=comparator.compare)]
+				self.addFace(newVerts)		
+			i = i+1
+			if i >= 1:
+				break	
 	
 	def flipNormals(self):
 		for f in self.faces:
@@ -1110,34 +1129,7 @@ class PolyMesh(object):
 		glBindBuffer(GL_VERTEX_ARRAY, self.triIndexBuffer)
 		
 		glEnable(GL_LIGHTING)
-		glCallList(self.DisplayList)
-	
-	def renderCCWEdgesDebug(self):
-		for v in self.vertices:
-			edges = v.getCCWSortedEdges()
-			for i in range(0, len(edges)):
-				v1 = edges[i].vertexAcross(v)
-				v2 = edges[(i+1)%len(edges)].vertexAcross(v)
-				(P0, P1, P2) = (v.pos, v1.pos, v2.pos)
-				normal = (P1 - P0) % (P2 - P0)
-				normal.normalize()
-				glBegin(GL_POLYGON)
-				glNormal3f(normal.x, normal.y, normal.z)
-				glVertex3f(P0.x, P0.y, P0.z)
-				glVertex3f(P1.x, P1.y, P1.z)
-				glVertex3f(P2.x, P2.y, P2.z)
-				glEnd()
-				Pc = P0 + P1 + P2
-				Pc = (1.0/3.0)*Pc
-				glDisable(GL_LIGHTING)
-				glColor3f(1, 0, 0)
-				glLineWidth(3)
-				glBegin(GL_LINES)
-				glVertex3f(Pc.x, Pc.y, Pc.z)
-				Pc = Pc + normal
-				glVertex3f(Pc.x, Pc.y, Pc.z)
-				glEnd()
-				glEnable(GL_LIGHTING)				
+		glCallList(self.DisplayList)			
 	
 	#Slow version with no spatial subdivision
 	def getRayIntersection(self, ray):

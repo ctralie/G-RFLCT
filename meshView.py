@@ -159,6 +159,11 @@ class MeshViewerCanvas(glcanvas.GLCanvas):
 		self.mesh.needsDisplayUpdate = True
 		self.Refresh()
 	
+	def Truncate(self, evt):
+		self.mesh.truncate(0.5)
+		self.mesh.needsDisplayUpdate = True
+		self.Refresh()
+	
 	def ComputeGeodesicDistances(self, evt):
 		if not self.mesh:
 			print "ERROR: Haven't loaded mesh yet"
@@ -432,6 +437,12 @@ class MeshViewerFrame(wx.Frame):
 		ConnectedComponentsButton = wx.Button(self, -1, "Delete All But Largest Connected Component")
 		self.Bind(wx.EVT_BUTTON, self.glcanvas.deleteConnectedComponents, ConnectedComponentsButton)
 		self.rightPanel.Add(ConnectedComponentsButton)		
+		
+		#Button for truncating mesh
+		self.rightPanel.Add(wx.StaticText(self, label="Truncate and Bevel Mesh"), 0, wx.EXPAND)
+		TruncateButton = wx.Button(self, -1, "Truncate")
+		self.Bind(wx.EVT_BUTTON, self.glcanvas.Truncate, TruncateButton)
+		self.rightPanel.Add(TruncateButton)		
 		
 		#Button for filling holes
 		self.rightPanel.Add(wx.StaticText(self, label="Fill Holes"), 0, wx.EXPAND)
