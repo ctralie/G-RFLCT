@@ -222,7 +222,7 @@ class MeshViewerCanvas(glcanvas.GLCanvas):
 		if self.mesh1:
 			glPushMatrix()
 			glMultMatrixd(transform.transpose().flatten())
-			self.mesh1.renderGL(self.displayMeshEdges, self.displayMeshVertices, self.displayMeshNormals, self.displayMeshFaces, False, None)
+			self.mesh1.renderGL(self.displayMeshEdges, self.displayMeshVertices, self.displayMeshNormals, self.displayMeshFaces, True, None)
 			glPopMatrix()
 		if self.mesh2:
 			self.mesh2.renderGL(self.displayMeshEdges, self.displayMeshVertices, self.displayMeshNormals, self.displayMeshFaces, True, None)

@@ -10,6 +10,7 @@ from LaplacianMesh import *
 from Geodesics import *
 from PointCloud import *
 from Cameras3D import *
+from PRST import PRST
 from sys import exit, argv
 import random
 import numpy as np
@@ -69,6 +70,7 @@ class MeshViewerCanvas(glcanvas.GLCanvas):
 		
 		#Face mesh variables and manipulation variables
 		self.mesh = None
+		self.PRSTPlaneMesh = None
 		self.meshCentroid = None
 		self.meshPrincipalAxes = None
 		self.displayMeshFaces = True
@@ -141,6 +143,27 @@ class MeshViewerCanvas(glcanvas.GLCanvas):
 		if self.cutPlane:
 			self.mesh.sliceBelowPlane(self.cutPlane, False)
 			self.mesh.starTriangulate() #TODO: This is a patch to deal with "non-planar faces" added
+			self.Refresh()
+
+	def doPRST(self, evt):
+		if self.mesh:
+			plane = PRST(self.mesh)
+			R = self.mesh.getBBox().getDiagLength()
+			P0 = plane.P0
+			N = plane.N
+			right = Vector3D(-N.y, N.x, 0)
+			if right.Length() == 0:
+				right = Vector3D(0, 0, 1)
+			right.normalize()
+			up = right % N
+			right = R*right
+			up = R*up
+			self.PRSTPlaneMesh = getRectMesh(P0 - right - up, P0 + right - up, P0 + right + up, P0 - right + up)
+			self.Refresh()
+
+	def FlipAcrossPlane(self, evt):
+		if self.cutPlane:
+			self.mesh.flipAcrossPlane(self.cutPlane)
 			self.Refresh()
 
 	def saveAutoRotatingScreenshots(self, evt):
@@ -284,7 +307,9 @@ class MeshViewerCanvas(glcanvas.GLCanvas):
 				glEnd()				
 				
 				glEnable(GL_LIGHTING)
-				
+		
+		if self.PRSTPlaneMesh:
+			self.PRSTPlaneMesh.renderGL()				
 		
 		if self.displayCutPlane:
 			t = farDist*self.camera.towards
@@ -423,6 +448,12 @@ class MeshViewerFrame(wx.Frame):
 		CutWithPlaneButton = wx.Button(self, -1, "Cut With Plane")
 		self.Bind(wx.EVT_BUTTON, self.glcanvas.CutWithPlane, CutWithPlaneButton)
 		self.rightPanel.Add(CutWithPlaneButton)
+		PRSTButton = wx.Button(self, -1, "Max Planar Symmetry")
+		self.Bind(wx.EVT_BUTTON, self.glcanvas.doPRST, PRSTButton)
+		self.rightPanel.Add(PRSTButton)
+		FlipAcrossPlaneButton = wx.Button(self, -1, "Flip Across Plane")
+		self.Bind(wx.EVT_BUTTON, self.glcanvas.FlipAcrossPlane, FlipAcrossPlaneButton)
+		self.rightPanel.Add(FlipAcrossPlaneButton)
 
 		#Button and text area for saving the rotating mesh
 		self.rightPanel.Add(wx.StaticText(self, label="Save Auto Rotating Screenshots"), 0, wx.EXPAND)

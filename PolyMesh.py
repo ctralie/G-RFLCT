@@ -812,6 +812,17 @@ class PolyMesh(object):
 			self.fillHoles(slicedHolesOnly = True)
 		self.needsDisplayUpdate = True
 	
+	def flipAcrossPlane(self, plane):
+		P0 = plane.P0
+		N = plane.N
+		for V in self.vertices:
+			P = V.pos
+			dP = P - P0
+			dPPar = N.proj(dP)
+			dPPerp = dP - dPPar
+			V.pos = P0 - dPPar + dPPerp
+		self.needsDisplayUpdate = True
+	
 	#############################################################
 	####                INPUT/OUTPUT METHODS                #####
 	#############################################################
@@ -865,7 +876,7 @@ class PolyMesh(object):
 					[nVertices, nFaces, nEdges] = fields[0:3]
 			elif vertex < nVertices:
 				fields = [float(i) for i in fields]
-				P = Point3D(fields[0], fields[1], fields[2])
+				P = Point3D(fields[0],fields[1], fields[2])
 				color = None
 				if len(fields) >= 6:
 					#There is color information
@@ -1023,6 +1034,7 @@ class PolyMesh(object):
 			if self.drawFaces:
 				if lightingOn:
 					glEnable(GL_LIGHTING)
+					glColor3f(0.5, 0.5, 0.5);
 				else:
 					glDisable(GL_LIGHTING)
 				for f in self.faces:
@@ -1400,5 +1412,7 @@ if __name__ == '__main__2':
 		print v.ID, " ",
 
 if __name__ == '__main__':
-	icosahedronMesh = getDodecahedronMesh()
-	icosahedronMesh.saveOffFile('dodecahedron.off')	
+	icosahedronMesh = getIcosahedronMesh()
+	icosahedronMesh.saveOffFile('icosahedron.off')
+	dodecahedronMesh = getDodecahedronMesh()
+	dodecahedronMesh.saveOffFile('dodecahedron.off')	
