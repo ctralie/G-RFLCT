@@ -41,32 +41,22 @@ def getBinAverage(minVal, maxVal, NIndices, idx):
 
 #TODO: Sample the points evenly on the mesh
 #Nx, Ny, Nz are the bin sizes
+#Returns: Tuple of (plane, pairs), where pairs is an array of point pairs 
+#that voted on the plane
 def PRST(mesh, NR = 64, NTheta = 64, NPhi = 64, MaxIter = 100000):
-	#First rotate the mesh so that it is aligned with its principal axes
-	#so that the bounding box will be more efficient and radial sampling
-	#will be more uniform
+	#Center the mesh so that the binning will be more uniform
 	centroid = mesh.getCentroid()
-	(Axis1, Axis2, Axis3, maxProj, minProj, axes) = mesh.getPrincipalAxes()
 	#Copy over the points and work with them
 	NPoints = len(mesh.vertices)
-	Points = np.ones((NPoints, 4))
+	Points = np.zeros((NPoints, 3))
 	for i in range(NPoints):
 		pos = mesh.vertices[i].pos
-		Points[i, 0:3] = [pos.x, pos.y, pos.z]
-	Rot = np.eye(4)
-	Rot[0:3, 0:3] = axes
-	Trans = np.eye(4)
-	Trans[0:3, 3] = [centroid.x, centroid.y, centroid.z]
-	T = Trans.dot(Rot)
-	TInv = linalg.inv(T)
-	Points = TInv.dot(Points.transpose())
-	Points = Points.transpose()
-	Points = Points[:, 0:3]
-	
+		Points[i, 0:3] = [pos.x - centroid.x, pos.y - centroid.y, pos.z - centroid.z]
 	#Setup the grid and index into it later based on the extent
 	#of R, theta, and Phi
 	RExtent = mesh.getBBox().getDiagLength()
 	grid = np.zeros((NR, NTheta, NPhi))
+	pairs = {}
 	
 	#Now do the Monte Carlo algorithm
 	for i in range(MaxIter):
@@ -80,7 +70,7 @@ def PRST(mesh, NR = 64, NTheta = 64, NPhi = 64, MaxIter = 100000):
 		N = P2 - P1 #Plane Normal (un-normalized)
 		d = linalg.norm(N) #distance between two points, d, as written in paper
 		(NormR, NormTheta, NormPhi) = normalToSpherical(N)
-		N = normalFromSpherical(NormTheta, NormPhi)
+		N = N/d
 		P = P1 + 0.5*(P2 - P1) #Point on plane
 		R = P.dot(N) #Signed distance of the plane from the origin
 		
@@ -91,24 +81,41 @@ def PRST(mesh, NR = 64, NTheta = 64, NPhi = 64, MaxIter = 100000):
 		RIdx = getBinIndex(-RExtent, RExtent, NR, R)
 		ThetaIdx = getBinIndex(0, math.pi/2, NTheta, NormTheta)
 		PhiIdx = getBinIndex(0, 2*math.pi, NPhi, NormPhi)
-		#TODO: Fix sampling
-		weight = 1.0/( d*d*math.sin(getBinAverage(0, math.pi/2, NTheta, ThetaIdx)) )
-		#weight = 1.0/(d*d)
+		#TODO: Fix weighting
+		#weight = 1.0/( d*d*math.sin(getBinAverage(0, math.pi/2, NTheta, ThetaIdx)) )
+		weight = 1.0/(d*d)
+		#weight = 1.0
 		grid[RIdx][ThetaIdx][PhiIdx] = grid[RIdx][ThetaIdx][PhiIdx] + weight
+		triple = (RIdx, ThetaIdx, PhiIdx)
+		if not triple in pairs:
+			pairs[triple] = []
+		pairs[triple].append([idx1, idx2])
 	
 	#Find the bin of the max plane
-	grid[grid.argmax()] = 0
-	(RIdx, ThetaIdx, PhiIdx) = np.unravel_index(grid.argmax(), grid.shape)
+	maxPair = (0, 0, 0)
+	maxVal = 0
+	for thispair in pairs:
+		(RIdx, ThetaIdx, PhiIdx) = thispair
+		if grid[RIdx][ThetaIdx][PhiIdx] > maxVal:
+			maxPair = thispair
+			maxVal = grid[RIdx][ThetaIdx][PhiIdx]
+	(RIdx, ThetaIdx, PhiIdx) = maxPair
 	R = getBinAverage(-RExtent, RExtent, NR, RIdx)
 	Theta = getBinAverage(0, math.pi/2, NTheta, ThetaIdx)
 	Phi = getBinAverage(0, 2*math.pi, NPhi, PhiIdx)
+	
 	#Convert the normal coordinates into cartesian and put the plane
 	#back in the frame of the mesh
 	N = np.array(normalFromSpherical(Theta, Phi))
-	P0 = np.array([0, 0, 0, 1])
-	P0[0:3] = R*N
-	N = Rot[0:3, 0:3].dot(N)
-	P0 = Trans.dot(P0)
+	P0 = R*N + [centroid.x, centroid.y, centroid.z]
 	N = Vector3D(N[0], N[1], N[2])
 	P0 = Point3D(P0[0], P0[1], P0[2])
-	return Plane3D(P0, N)
+	print "(RIdx, ThetaIdx, PhiIdx) = (%i, %i, %i)"%(RIdx, ThetaIdx, PhiIdx)
+	print "(NPairs, maxVal) = (%i, %g)"%(len(pairs[(RIdx, ThetaIdx, PhiIdx)]), maxVal)
+
+		
+	maxPairs = pairs[(RIdx, ThetaIdx, PhiIdx)]
+	for i in range(len(maxPairs)):
+		for j in [0, 1]:
+			maxPairs[i][j] = mesh.vertices[maxPairs[i][j]].pos
+	return (Plane3D(P0, N), maxPairs)

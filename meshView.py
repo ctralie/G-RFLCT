@@ -70,7 +70,6 @@ class MeshViewerCanvas(glcanvas.GLCanvas):
 		
 		#Face mesh variables and manipulation variables
 		self.mesh = None
-		self.PRSTPlaneMesh = None
 		self.meshCentroid = None
 		self.meshPrincipalAxes = None
 		self.displayMeshFaces = True
@@ -80,6 +79,9 @@ class MeshViewerCanvas(glcanvas.GLCanvas):
 		self.displayPrincipalAxes = False
 		self.useLighting = True
 		self.vertexColors = np.zeros(0)
+
+		self.PRSTPlaneMesh = None
+		self.PRSTPointPairs = []
 		
 		self.cutPlane = None
 		self.displayCutPlane = False
@@ -147,10 +149,11 @@ class MeshViewerCanvas(glcanvas.GLCanvas):
 
 	def doPRST(self, evt):
 		if self.mesh:
-			plane = PRST(self.mesh)
+			(plane, self.PRSTPointPairs) = PRST(self.mesh)
 			R = self.mesh.getBBox().getDiagLength()
 			P0 = plane.P0
 			N = plane.N
+			#Quick-n-dirty find directions orthogonal to normal
 			right = Vector3D(-N.y, N.x, 0)
 			if right.Length() == 0:
 				right = Vector3D(0, 0, 1)
@@ -309,7 +312,26 @@ class MeshViewerCanvas(glcanvas.GLCanvas):
 				glEnable(GL_LIGHTING)
 		
 		if self.PRSTPlaneMesh:
-			self.PRSTPlaneMesh.renderGL()				
+			self.PRSTPlaneMesh.renderGL()
+			glDisable(GL_LIGHTING)
+			glColor3f(1, 0, 0)
+			glPointSize(10)
+			glBegin(GL_POINTS)
+			for pair in self.PRSTPointPairs:
+				P = pair[0]
+				glVertex3f(P.x, P.y, P.z)
+			glColor3f(0, 1, 0)
+			for pair in self.PRSTPointPairs:
+				P = pair[1]
+				glVertex3f(P.x, P.y, P.z)
+			glEnd()
+			glColor3f(0, 0, 1)
+			glLineWidth(5)
+			glBegin(GL_LINES)
+			for pair in self.PRSTPointPairs:
+				glVertex3f(pair[0].x, pair[0].y, pair[0].z)
+				glVertex3f(pair[1].x, pair[1].y, pair[1].z)
+			glEnd()
 		
 		if self.displayCutPlane:
 			t = farDist*self.camera.towards
