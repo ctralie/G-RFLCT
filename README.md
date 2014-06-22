@@ -1,7 +1,7 @@
 Geometry Radio-Frequency Library by Chris Tralie
 ===========
 
-This library started out as a geometry library to support some work with computational electromagnetics for radar, but it has turned into a much more general purpose 3D geometry library.  Features include
+This library started out as a geometry library to support some work with computational electromagnetics for radar, but it has turned into a much more general purpose 3D geometry library.  Please visit the wiki for some screenshots and videos of this software in action
 
 Features
 --------------
