@@ -67,6 +67,10 @@ class MeshViewerCanvas(glcanvas.GLCanvas):
 		#State variables for saving screenshots
 		self.savingRotScreenshots = False
 		self.rotAngle = 0
+		self.savingLightSweep = False
+		self.lightPhi = 0
+		self.lightTheta = 0
+		self.lightIter = 0
 		
 		#Face mesh variables and manipulation variables
 		self.mesh = None
@@ -176,6 +180,15 @@ class MeshViewerCanvas(glcanvas.GLCanvas):
 		self.zCenter = (self.bbox.zmax + self.bbox.zmin) / 2.0
 		self.Refresh()
 
+	def saveLightSweepScreenshots(self, evt):
+		self.savingLightSweep = True
+		self.lightPhi = -math.pi/2
+		self.lightTheta = 0
+		self.lightIter = 0
+		self.camera.centerOnBBox(self.bbox, theta = -math.pi/2, phi = math.pi/2)
+		self.zCenter = (self.bbox.zmax + self.bbox.zmin) / 2.0
+		self.Refresh()
+
 	def deleteConnectedComponents(self, evt):
 		if self.mesh:
 			self.mesh.deleteAllButLargestConnectedComponent()
@@ -258,6 +271,26 @@ class MeshViewerCanvas(glcanvas.GLCanvas):
 		self.camera.gotoCameraFrame()	
 		glClearColor(0.0, 0.0, 0.0, 0.0)
 		glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT)
+		
+		if self.savingLightSweep:
+			lightPos = np.array([3.0, 4.0, 5.0])
+			Phi = self.lightPhi
+			RotMatrix = np.array([[1, 0, 0], [0, math.cos(Phi), -math.sin(Phi)], [0, math.sin(Phi), math.cos(Phi)] ])
+			lightPos = RotMatrix.dot(lightPos)
+			glLightfv(GL_LIGHT0, GL_POSITION, [lightPos[0], lightPos[1], lightPos[2], 0.0]);
+			glEnable(GL_LIGHTING)
+			glMaterialfv(GL_FRONT_AND_BACK, GL_AMBIENT_AND_DIFFUSE, [0.8, 0.8, 0.8, 1.0]);
+			glMaterialfv(GL_FRONT_AND_BACK, GL_SPECULAR, [0.2, 0.2, 0.2, 1.0])
+			glMaterialfv(GL_FRONT_AND_BACK, GL_SHININESS, 64)
+			self.mesh.renderGL(self.displayMeshEdges, self.displayMeshVertices, self.displayMeshNormals, self.displayMeshFaces, self.useLighting, None)
+			saveImageGL(self, "%s%i.png"%(self.lightFilePrefixCtrl.GetLineText(0), self.lightIter))
+			self.lightPhi = self.lightPhi + 0.05
+			self.lightIter = self.lightIter + 1
+			if self.lightPhi > math.pi/2:
+				self.savingLightSweep = False
+			self.SwapBuffers()
+			self.Refresh()
+			return		
 		
 		glLightfv(GL_LIGHT0, GL_POSITION, [3.0, 4.0, 5.0, 0.0]);
 		glLightfv(GL_LIGHT1, GL_POSITION,  [-3.0, -2.0, -3.0, 0.0]);
@@ -485,6 +518,14 @@ class MeshViewerFrame(wx.Frame):
 		SaveAutoRotatingScreenshotsButton = wx.Button(self, -1, "Save Auto Rotating Screenshots")
 		self.Bind(wx.EVT_BUTTON, self.glcanvas.saveAutoRotatingScreenshots, SaveAutoRotatingScreenshotsButton )
 		self.rightPanel.Add(SaveAutoRotatingScreenshotsButton )
+
+		#Button and text area for saving the rotating light
+		self.rightPanel.Add(wx.StaticText(self, label="Save Light Sweeping Screenshots"), 0, wx.EXPAND)
+		self.glcanvas.lightFilePrefixCtrl = wx.TextCtrl(self, -1, "Lighting")
+		self.rightPanel.Add(self.glcanvas.lightFilePrefixCtrl)
+		SaveLightSweepScreenshotsButton = wx.Button(self, -1, "Save Light Sweeping Screenshots")
+		self.Bind(wx.EVT_BUTTON, self.glcanvas.saveLightSweepScreenshots, SaveLightSweepScreenshotsButton )
+		self.rightPanel.Add(SaveLightSweepScreenshotsButton)
 
 		#Button for deleting all but largest connected component
 		self.rightPanel.Add(wx.StaticText(self, label="Connected Components"), 0, wx.EXPAND)
