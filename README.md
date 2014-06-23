@@ -24,3 +24,10 @@ This stuff is sort of working but buggy...hopefully items will slowly mature
 * 3D Planar Reflective Symmetry Transform (sampling problems)
 * Fast marching for geodesic distances (need to handle obtuse triangles)
 * Generalized Multidimensional Scaling (boundary case problems cause it to get stuck)
+
+Dependencies
+--------------
+* PyOpenGL
+* wxPython
+* numpy
+* scipy

@@ -53,8 +53,8 @@ class MeshViewerCanvas(glcanvas.GLCanvas):
 		self.parent = parent
 		#Camera state variables
 		self.size = self.GetClientSize()
-		#self.camera = MouseSphericalCamera(self.size.x, self.size.y)
-		self.camera = MousePolarCamera(self.size.width, self.size.height)
+		self.camera = MouseSphericalCamera(self.size.x, self.size.y)
+		#self.camera = MousePolarCamera(self.size.width, self.size.height)
 		
 		#Main state variables
 		self.MousePos = [0, 0]
@@ -345,6 +345,7 @@ class MeshViewerCanvas(glcanvas.GLCanvas):
 			glColor3f(0, 1, 0)
 			cutPlaneMesh.renderGL(lightingOn = False)
 			self.cutPlane = Plane3D(P0, r)
+			print "%s, %s"%(P0, r)
 		
 		self.SwapBuffers()
 	

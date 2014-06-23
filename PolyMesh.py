@@ -258,6 +258,15 @@ class PolyMesh(object):
 		#connected components
 		self.components = []
 	
+	def Clone(self):
+		newMesh = PolyMesh()
+		for i in range(len(self.vertices)):
+			newMesh.addVertex(self.vertices[i].pos, self.vertices[i].color)
+		for i in range(len(self.faces)):
+			vertices = [newMesh.vertices[v.ID] for v in self.faces[i].getVertices()]
+			newMesh.addFace(vertices)
+		return newMesh
+	
 	#Return the edge between v1 and v2 if it exists, or
 	#return None if an edge has not yet been created 
 	#between them
@@ -811,6 +820,11 @@ class PolyMesh(object):
 		if fillHoles:
 			self.fillHoles(slicedHolesOnly = True)
 		self.needsDisplayUpdate = True
+	
+	def sliceAbovePlane(self, plane, fillHoles = True):
+		planeNeg = Plane3D(plane.P0, plane.N)
+		planeNeg.initFromEquation(-plane.A, -plane.B, -plane.C, -plane.D)
+		self.sliceBelowPlane(planeNeg, fillHoles)
 	
 	def flipAcrossPlane(self, plane):
 		P0 = plane.P0
