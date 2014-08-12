@@ -2,6 +2,16 @@ from Primitives3D import *
 from Shapes3D import *
 from PolyMesh import *
 
+def splitIntoRGBA(val):
+	A = (0xff000000&val)>>24
+	R = (0x00ff0000&val)>>16
+	G = (0x0000ff00&val)>>8
+	B = (0x000000ff&val)
+	return [R, G, B, A]
+
+def extractFromRGBA(R, G, B, A):
+	return ((A<<24)&0xff000000) | ((R<<16)&0x00ff0000) | ((G<<8)&0x0000ff00) | (B&0x000000ff)
+
 class RGB3D(object):
 	def __init__(self, R = 1.0, G = 1.0, B = 1.0, A = 0.0):
 		[self.R, self.G, self.B, self.A] = [R, G, B, A]
@@ -47,3 +57,10 @@ class RadiosityMaterial(object):
 		ret.BExcident = self.BExcident.clone()
 		ret.BUnshot = self.BUnshot.clone()
 		return ret
+
+if __name__ == '__main__':
+	val = 0xdeefacc
+	[R, G, B, A] = splitIntoRGBA(val)
+	val2 = extractFromRGBA(R, G, B, A)
+	print "%x, %x"%(val, val)
+	print "[R, G, B, A] = [%u, %u, %u, %u]"%(R, G, B, A)

@@ -243,6 +243,7 @@ def getVertexInCommon(e1, e2):
 class PolyMesh(object):
 	def __init__(self):
 		self.DisplayList = -1
+		self.IndexDisplayList = -1
 		self.vertexBuffer = -1
 		self.colorBuffer = -1
 		self.triIndexBuffer = -1
@@ -1025,6 +1026,10 @@ class PolyMesh(object):
 		fout.close()
 		if verbose:
 			print "Saved file to %s"%filename
+
+	#############################################################
+	####                     RENDERING                      #####
+	#############################################################
 	
 	#vertexColors is an Nx3 numpy array, where N is the number of vertices
 	def renderGL(self, drawEdges = 0, drawVerts = 0, drawNormals = 0, drawFaces = 1, lightingOn = True, extraVerts = None ):
@@ -1048,7 +1053,7 @@ class PolyMesh(object):
 			if self.drawFaces:
 				if lightingOn:
 					glEnable(GL_LIGHTING)
-					glColor3f(0.5, 0.5, 0.5);
+					glColor3f(0.5, 0.5, 0.5)
 				else:
 					glDisable(GL_LIGHTING)
 				for f in self.faces:
@@ -1102,6 +1107,36 @@ class PolyMesh(object):
 			self.needsDisplayUpdate = False
 		glCallList(self.DisplayList)
 
+	#Render the vertices of the mesh as points with colors equal to their indices
+	#in the vertex list.  Used to help with vertex selection (will work as long as
+	#there are fewer than 2^32 vertices)
+	def renderGLIndices(self):
+		if self.needsDisplayUpdate:
+			if self.IndexDisplayList != -1: #Deallocate previous display list
+				glDeleteLists(self.IndexDisplayList, 1)
+			self.IndexDisplayList = glGenLists(1)
+			glNewList(self.IndexDisplayList, GL_COMPILE)
+			glDisable(GL_LIGHTING)
+			N = len(self.vertices)
+			#First draw all of the faces with index N+1 so that occlusion is
+			#taken into proper consideration
+			[R, G, B, A] = splitIntoRGBA(N+2)
+			glColor4ub(R, G, B, A)
+			for f in self.faces:
+				f.drawFilled()
+			glPointSize(20)
+			glBegin(GL_POINTS)
+			for i in range(0, N):
+				P = self.vertices[i].pos
+				[R, G, B, A] = splitIntoRGBA(i+1)
+				glColor4ub(R, G, B, A)
+				glVertex3f(P.x, P.y, P.z)
+			glEnd()
+			glEnable(GL_LIGHTING)
+			glEndList()
+			self.needsDisplayUpdate = False
+		glCallList(self.IndexDisplayList)	
+
 	#vertexColors is an Nx3 numpy array, where N is the number of vertices
 	def renderGLTriBuffers(self):
 		#TODO: Finish this
@@ -1116,7 +1151,7 @@ class PolyMesh(object):
 			#Set up vertex buffer
 			self.vertexBuffer = glGenBuffers(1)
 			glBindBuffer(GL_ARRAY_BUFFER, self.vertexBuffer)
-			self.vertexBufferData = [0]*(3*len(self.vertices))
+			self.vertexBufferData = [0.0]*(3*len(self.vertices))
 			for i in range(len(self.vertices)):
 				P = self.vertices[i].pos
 				self.vertexBufferData[i*3] = P.x
@@ -1144,18 +1179,18 @@ class PolyMesh(object):
 			for i in range(len(self.faces)):
 				Vs = [V.ID for V in self.faces[i].getVertices()]
 				self.triBufferData[i*3:(i+1)*3] = Vs
-			self.triBufferData = np.array(self.triBufferData)
+			self.triBufferData = np.array(self.triBufferData, dtype=np.float32)
 			self.needsDisplayUpdate = False
 		
 		glDisable(GL_LIGHTING)
 		glBindBuffer(GL_ARRAY_BUFFER, self.vertexBuffer)
-		glVertexPointer(3, GL_FLOAT, 12, self.vertexBuffer)
-		glBindBuffer(GL_COLOR_BUFFER, self.colorBuffer)
-		glColorPointer(3, GL_FLOAT, 12, self.colorBuffer)
+		#glVertexPointerd(self.vertexBuffer)
+		#glBindBuffer(GL_COLOR_BUFFER, self.colorBuffer)
+		#glColorPointer(3, GL_FLOAT, 12, self.colorBuffer)
 		glBindBuffer(GL_VERTEX_ARRAY, self.triIndexBuffer)
 		
 		glEnable(GL_LIGHTING)
-		glCallList(self.DisplayList)			
+		glDrawArrays(GL_TRIANGLES, 0, len(self.triIndexBuffer))
 	
 	#Slow version with no spatial subdivision
 	def getRayIntersection(self, ray):

@@ -10,6 +10,7 @@ from LaplacianMesh import *
 from Geodesics import *
 from PointCloud import *
 from Cameras3D import *
+from struct import *
 from PRST import PRST
 from sys import exit, argv
 import random
@@ -19,10 +20,19 @@ from pylab import cm
 import os
 import math
 import time
+from time import sleep
 
 DEFAULT_SIZE = wx.Size(1200, 800)
 DEFAULT_POS = wx.Point(10, 10)
 PRINCIPAL_AXES_SCALEFACTOR = 1
+
+
+#GUI States
+(STATE_NORMAL, STATE_SAVEROTATIONS, STATE_SAVELIGHTING, STATE_CHOOSELAPLACEVERTICES) = (0, 1, 2, 3)
+SUBSTATE_NONE = -1
+
+#Laplacian substates
+(CHOOSELAPLACE_WAITING, CHOOSELAPLACE_PICKVERTEX) = (0, 1)
 
 def saveImageGL(mvcanvas, filename):
 	view = glGetIntegerv(GL_VIEWPORT)
@@ -50,6 +60,9 @@ class MeshViewerCanvas(glcanvas.GLCanvas):
 		glcanvas.GLCanvas.__init__(self, parent, -1, attribList = attribs)	
 		self.context = glcanvas.GLContext(self)
 		
+		self.GUIState = STATE_NORMAL
+		self.GUISubstate = SUBSTATE_NONE
+		
 		self.parent = parent
 		#Camera state variables
 		self.size = self.GetClientSize()
@@ -65,12 +78,14 @@ class MeshViewerCanvas(glcanvas.GLCanvas):
 		random.seed()
 		
 		#State variables for saving screenshots
-		self.savingRotScreenshots = False
 		self.rotAngle = 0
-		self.savingLightSweep = False
 		self.lightPhi = 0
 		self.lightTheta = 0
 		self.lightIter = 0
+		
+		#State variables for laplacian mesh operations
+		self.selectedIndices = {} #Elements will be key-value pairs (idx, Point3D(new position))
+		self.currentIdx = -1
 		
 		#Face mesh variables and manipulation variables
 		self.mesh = None
@@ -174,25 +189,33 @@ class MeshViewerCanvas(glcanvas.GLCanvas):
 			self.Refresh()
 
 	def saveAutoRotatingScreenshots(self, evt):
-		self.savingRotScreenshots = True
-		self.rotAngle = -80
-		self.camera.centerOnBBox(self.bbox, theta = -math.pi/2, phi = math.pi/2)
-		self.zCenter = (self.bbox.zmax + self.bbox.zmin) / 2.0
-		self.Refresh()
+		dlg = wx.TextEntryDialog(None,'File Prefix Name','Saving Rotation Sweep', 'Rotation')
+		if dlg.ShowModal() == wx.ID_OK:
+			self.rotatingScreenshotsPrefix = dlg.GetValue()
+			self.GUIState = STATE_SAVEROTATIONS
+			self.rotAngle = -80
+			self.camera.centerOnBBox(self.bbox, theta = -math.pi/2, phi = math.pi/2)
+			self.zCenter = (self.bbox.zmax + self.bbox.zmin) / 2.0
+			self.Refresh()
+		dlg.Destroy()
 
 	def saveLightSweepScreenshots(self, evt):
-		self.savingLightSweep = True
-		self.lightPhi = -math.pi/2
-		self.lightTheta = 0
-		self.lightIter = 0
-		self.camera.centerOnBBox(self.bbox, theta = -math.pi/2, phi = math.pi/2)
-		self.zCenter = (self.bbox.zmax + self.bbox.zmin) / 2.0
-		self.Refresh()
+		dlg = wx.TextEntryDialog(None,'File Prefix Name','Saving Lighting Sweep', 'Lighting')
+		if dlg.ShowModal() == wx.ID_OK:
+			self.lightingScreenshotsPrefix = dlg.GetValue()
+			self.GUIState = STATE_SAVELIGHTING
+			self.lightPhi = -math.pi/2
+			self.lightTheta = 0
+			self.lightIter = 0
+			self.camera.centerOnBBox(self.bbox, theta = -math.pi/2, phi = math.pi/2)
+			self.zCenter = (self.bbox.zmax + self.bbox.zmin) / 2.0
+			self.Refresh()
+		dlg.Destroy()
 
 	def deleteConnectedComponents(self, evt):
 		if self.mesh:
 			self.mesh.deleteAllButLargestConnectedComponent()
-			
+
 	def FillHoles(self, evt):
 		self.mesh.fillHoles()
 		self.mesh.needsDisplayUpdate = True
@@ -236,6 +259,12 @@ class MeshViewerCanvas(glcanvas.GLCanvas):
 		self.mesh.needsDisplayUpdate = True
 		self.Refresh()
 	
+	def doLaplacianMeshSelectVertices(self, evt):
+		if self.mesh:
+			self.GUIState = STATE_CHOOSELAPLACEVERTICES
+			self.GUISubstate = CHOOSELAPLACE_WAITING
+			self.Refresh()
+	
 	def processEraseBackgroundEvent(self, event): pass #avoid flashing on MSW.
 
 	def processSizeEvent(self, event):
@@ -257,64 +286,16 @@ class MeshViewerCanvas(glcanvas.GLCanvas):
 			self.GLinitialized = True
 		self.repaint()
 
-	def repaint(self):
-		#Set up projection matrix
-		glMatrixMode(GL_PROJECTION)
-		glLoadIdentity()
-		farDist = (self.camera.eye - self.bbox.getCenter()).Length()*2
-		#This is to make sure we can see on the inside
-		farDist = max(farDist, self.unionbbox.getDiagLength()*2)
-		nearDist = farDist/50.0
-		gluPerspective(180.0*self.camera.yfov/M_PI, float(self.size.x)/self.size.y, nearDist, farDist)
-		
-		#Set up modelview matrix
-		self.camera.gotoCameraFrame()	
-		glClearColor(0.0, 0.0, 0.0, 0.0)
-		glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT)
-		
-		if self.savingLightSweep:
-			lightPos = np.array([3.0, 4.0, 5.0])
-			Phi = self.lightPhi
-			RotMatrix = np.array([[1, 0, 0], [0, math.cos(Phi), -math.sin(Phi)], [0, math.sin(Phi), math.cos(Phi)] ])
-			lightPos = RotMatrix.dot(lightPos)
-			glLightfv(GL_LIGHT0, GL_POSITION, [lightPos[0], lightPos[1], lightPos[2], 0.0]);
+	def drawMeshStandard(self):
+		if self.mesh:
+			glLightfv(GL_LIGHT0, GL_POSITION, [3.0, 4.0, 5.0, 0.0]);
+			glLightfv(GL_LIGHT1, GL_POSITION,  [-3.0, -2.0, -3.0, 0.0]);
 			glEnable(GL_LIGHTING)
 			glMaterialfv(GL_FRONT_AND_BACK, GL_AMBIENT_AND_DIFFUSE, [0.8, 0.8, 0.8, 1.0]);
 			glMaterialfv(GL_FRONT_AND_BACK, GL_SPECULAR, [0.2, 0.2, 0.2, 1.0])
 			glMaterialfv(GL_FRONT_AND_BACK, GL_SHININESS, 64)
 			self.mesh.renderGL(self.displayMeshEdges, self.displayMeshVertices, self.displayMeshNormals, self.displayMeshFaces, self.useLighting, None)
-			saveImageGL(self, "%s%i.png"%(self.lightFilePrefixCtrl.GetLineText(0), self.lightIter))
-			self.lightPhi = self.lightPhi + 0.05
-			self.lightIter = self.lightIter + 1
-			if self.lightPhi > math.pi/2:
-				self.savingLightSweep = False
-			self.SwapBuffers()
-			self.Refresh()
-			return		
-		
-		glLightfv(GL_LIGHT0, GL_POSITION, [3.0, 4.0, 5.0, 0.0]);
-		glLightfv(GL_LIGHT1, GL_POSITION,  [-3.0, -2.0, -3.0, 0.0]);
-		
-		glEnable(GL_LIGHTING)
-		glMaterialfv(GL_FRONT_AND_BACK, GL_AMBIENT_AND_DIFFUSE, [0.8, 0.8, 0.8, 1.0]);
-		glMaterialfv(GL_FRONT_AND_BACK, GL_SPECULAR, [0.2, 0.2, 0.2, 1.0])
-		glMaterialfv(GL_FRONT_AND_BACK, GL_SHININESS, 64)
-		
-		if self.savingRotScreenshots:
-			glTranslatef(0, 0, self.zCenter)
-			glRotatef(self.rotAngle, 0, 1, 0)
-			glTranslatef(0, 0, -self.zCenter)
-			self.mesh.renderGL(self.displayMeshEdges, self.displayMeshVertices, self.displayMeshNormals, self.displayMeshFaces, self.useLighting, None)
-			saveImageGL(self, "%s%i.png"%(self.rotFilePrefixCtrl.GetLineText(0), self.rotAngle))
-			self.rotAngle = self.rotAngle + 5
-			if self.rotAngle > 80:
-				self.savingRotScreenshots = False
-			self.SwapBuffers()
-			self.Refresh()
-			return
-		
-		if self.mesh:
-			self.mesh.renderGL(self.displayMeshEdges, self.displayMeshVertices, self.displayMeshNormals, self.displayMeshFaces, self.useLighting, None)
+			#self.mesh.renderGLTriBuffers()
 			if self.displayPrincipalAxes:
 				(Axis1, Axis2, Axis3, maxProj, minProj, axes)	= self.meshPrincipalAxes
 				C = self.meshCentroid
@@ -343,7 +324,7 @@ class MeshViewerCanvas(glcanvas.GLCanvas):
 				glEnd()				
 				
 				glEnable(GL_LIGHTING)
-		
+
 		if self.PRSTPlaneMesh:
 			self.PRSTPlaneMesh.renderGL()
 			glDisable(GL_LIGHTING)
@@ -379,7 +360,101 @@ class MeshViewerCanvas(glcanvas.GLCanvas):
 			cutPlaneMesh.renderGL(lightingOn = False)
 			self.cutPlane = Plane3D(P0, r)
 			print "%s, %s"%(P0, r)
+
+	def repaint(self):
+		#Set up projection matrix
+		glMatrixMode(GL_PROJECTION)
+		glLoadIdentity()
+		farDist = (self.camera.eye - self.bbox.getCenter()).Length()*2
+		#This is to make sure we can see on the inside
+		farDist = max(farDist, self.unionbbox.getDiagLength()*2)
+		nearDist = farDist/50.0
+		gluPerspective(180.0*self.camera.yfov/M_PI, float(self.size.x)/self.size.y, nearDist, farDist)
 		
+		#Set up modelview matrix
+		self.camera.gotoCameraFrame()	
+		glClearColor(0.0, 0.0, 0.0, 0.0)
+		glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT)
+		
+		if self.GUIState == STATE_NORMAL:
+			self.drawMeshStandard()
+		elif self.GUIState == STATE_SAVELIGHTING:
+			lightPos = np.array([3.0, 4.0, 5.0])
+			Phi = self.lightPhi
+			RotMatrix = np.array([[1, 0, 0], [0, math.cos(Phi), -math.sin(Phi)], [0, math.sin(Phi), math.cos(Phi)] ])
+			lightPos = RotMatrix.dot(lightPos)
+			glLightfv(GL_LIGHT0, GL_POSITION, [lightPos[0], lightPos[1], lightPos[2], 0.0]);
+			glEnable(GL_LIGHTING)
+			glMaterialfv(GL_FRONT_AND_BACK, GL_AMBIENT_AND_DIFFUSE, [0.8, 0.8, 0.8, 1.0]);
+			glMaterialfv(GL_FRONT_AND_BACK, GL_SPECULAR, [0.2, 0.2, 0.2, 1.0])
+			glMaterialfv(GL_FRONT_AND_BACK, GL_SHININESS, 64)
+			self.mesh.renderGL(self.displayMeshEdges, self.displayMeshVertices, self.displayMeshNormals, self.displayMeshFaces, self.useLighting, None)
+			saveImageGL(self, "%s%i.png"%(self.lightingScreenshotsPrefix, self.lightIter))
+			self.lightPhi = self.lightPhi + 0.05
+			self.lightIter = self.lightIter + 1
+			if self.lightPhi > math.pi/2:
+				self.GUIState = STATE_NORMAL
+			self.SwapBuffers()
+			self.Refresh()
+		elif self.GUIState == STATE_SAVEROTATIONS:
+			glLightfv(GL_LIGHT0, GL_POSITION, [3.0, 4.0, 5.0, 0.0]);
+			glLightfv(GL_LIGHT1, GL_POSITION,  [-3.0, -2.0, -3.0, 0.0]);
+			glEnable(GL_LIGHTING)
+			glMaterialfv(GL_FRONT_AND_BACK, GL_AMBIENT_AND_DIFFUSE, [0.8, 0.8, 0.8, 1.0]);
+			glMaterialfv(GL_FRONT_AND_BACK, GL_SPECULAR, [0.2, 0.2, 0.2, 1.0])
+			glMaterialfv(GL_FRONT_AND_BACK, GL_SHININESS, 64)
+			self.mesh.renderGL(self.displayMeshEdges, self.displayMeshVertices, self.displayMeshNormals, self.displayMeshFaces, self.useLighting, None)
+			glTranslatef(0, 0, self.zCenter)
+			glRotatef(self.rotAngle, 0, 1, 0)
+			glTranslatef(0, 0, -self.zCenter)
+			self.mesh.renderGL(self.displayMeshEdges, self.displayMeshVertices, self.displayMeshNormals, self.displayMeshFaces, self.useLighting, None)
+			saveImageGL(self, "%s%i.png"%(self.rotatingScreenshotsPrefix, self.rotAngle))
+			self.rotAngle = self.rotAngle + 5
+			if self.rotAngle > 80:
+				self.GUIState = STATE_NORMAL
+			self.SwapBuffers()
+			self.Refresh()
+		elif self.GUIState == STATE_CHOOSELAPLACEVERTICES:
+			if self.GUISubstate == CHOOSELAPLACE_WAITING:
+				self.drawMeshStandard()
+				glDisable(GL_LIGHTING)
+				glPointSize(10)
+				glColor3f(0, 0, 1)
+				glBegin(GL_POINTS)
+				for idx in self.selectedIndices:
+					P = self.mesh.vertices[idx].pos
+					glVertex3f(P.x, P.y, P.z)
+				glEnd()
+				glColor3f(1, 1, 0)
+				glBegin(GL_LINES)
+				for idx in self.selectedIndices:
+					P1 = self.mesh.vertices[idx].pos
+					P2 = self.selectedIndices[idx]
+					glVertex3f(P1.x, P1.y, P1.z)
+					glVertex3f(P2.x, P2.y, P2.z)
+				glEnd()
+				
+			elif self.GUISubstate == CHOOSELAPLACE_PICKVERTEX:
+				if self.mesh.IndexDisplayList == -1:
+					self.mesh.needsDisplayUpdate = True
+				glClearColor(0.0, 0.0, 0.0, 0.0)
+				glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT)
+				self.mesh.renderGLIndices()
+				saveImageGL(self, "out.png")
+				pixel = glReadPixels(self.MousePos[0], self.MousePos[1], 1, 1, GL_RGBA, GL_UNSIGNED_BYTE)
+				[R, G, B, A] = [int(pixel.encode("hex")[i*2:(i+1)*2], 16) for i in range(4)]
+				idx = extractFromRGBA(R, G, B, 0) - 1
+				if idx > 0 and idx < len(self.mesh.vertices)+1:
+					if idx in self.selectedIndices:
+						#De-select if it's already selected
+						self.currentIdx = -1
+						self.selectedIndices.pop(idx, None)
+					else:
+						self.selectedIndices[idx] = self.mesh.vertices[idx].pos.Copy()
+						self.currentIdx = idx
+				self.GUISubstate = CHOOSELAPLACE_WAITING
+				self.Refresh()
+	
 		self.SwapBuffers()
 	
 	def initGL(self):		
@@ -399,6 +474,11 @@ class MeshViewerCanvas(glcanvas.GLCanvas):
 		self.MousePos = [x, y]
 
 	def MouseDown(self, evt):
+		state = wx.GetMouseState()
+		if self.GUIState == STATE_CHOOSELAPLACEVERTICES:
+			if state.ShiftDown():
+				#Pick vertex for laplacian mesh constraints
+				self.GUISubstate = CHOOSELAPLACE_PICKVERTEX
 		x, y = evt.GetPosition()
 		self.CaptureMouse()
 		self.handleMouseStuff(x, y)
@@ -411,23 +491,38 @@ class MeshViewerCanvas(glcanvas.GLCanvas):
 		self.Refresh()
 
 	def MouseMotion(self, evt):
+		state = wx.GetMouseState()
 		x, y = evt.GetPosition()
 		[lastX, lastY] = self.MousePos
 		self.handleMouseStuff(x, y)
 		dX = self.MousePos[0] - lastX
 		dY = self.MousePos[1] - lastY
 		if evt.Dragging():
-			if evt.MiddleIsDown():
-				self.camera.translate(dX, dY)
-			elif evt.RightIsDown():
-				self.camera.zoom(-dY)#Want to zoom in as the mouse goes up
-			elif evt.LeftIsDown():
-				self.camera.orbitLeftRight(dX)
-				self.camera.orbitUpDown(dY)
+			idx = self.currentIdx
+			if self.GUIState == STATE_CHOOSELAPLACEVERTICES and state.ControlDown() and self.currentIdx in self.selectedIndices:
+				#Move up laplacian mesh constraint
+				t = self.camera.towards
+				u = self.camera.up
+				r = t % u
+				P0 = self.selectedIndices[idx]
+				plane = Plane3D(P0, t)
+				view = glGetIntegerv(GL_VIEWPORT)
+				#TODO: Finish this
+				self.selectedIndices[idx] = self.selectedIndices[idx] + u
+				print self.selectedIndices[idx]
+			else:
+				#Translate/rotate shape
+				if evt.MiddleIsDown():
+					self.camera.translate(dX, dY)
+				elif evt.RightIsDown():
+					self.camera.zoom(-dY)#Want to zoom in as the mouse goes up
+				elif evt.LeftIsDown():
+					self.camera.orbitLeftRight(dX)
+					self.camera.orbitUpDown(dY)
 		self.Refresh()
 
 class MeshViewerFrame(wx.Frame):
-	(ID_LOADDATASET, ID_SAVEDATASET, ID_SAVEDATASETMETERS, ID_SAVESCREENSHOT) = (1, 2, 3, 4)
+	(ID_LOADDATASET, ID_SAVEDATASET, ID_SAVEDATASETMETERS, ID_SAVESCREENSHOT, ID_CONNECTEDCOMPONENTS, ID_TRUNCATE, ID_FILLHOLES, ID_GEODESICDISTANCES, ID_PRST, ID_INTERPOLATECOLORS, ID_SAVEROTATINGSCREENSOTS, ID_SAVELIGHTINGSCREENSHOTS, ID_SELECTLAPLACEVERTICES) = (1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13)
 	
 	def __init__(self, parent, id, title, pos=DEFAULT_POS, size=DEFAULT_SIZE, style=wx.DEFAULT_FRAME_STYLE, name = 'GLWindow'):
 		style = style | wx.NO_FULL_REPAINT_ON_RESIZE
@@ -438,7 +533,9 @@ class MeshViewerFrame(wx.Frame):
 		self.size = size
 		self.pos = pos
 		print "MeshViewerFrameSize = %s, pos = %s"%(self.size, self.pos)
+		self.glcanvas = MeshViewerCanvas(self)
 		
+		#####File menu
 		filemenu = wx.Menu()
 		menuOpenMesh = filemenu.Append(MeshViewerFrame.ID_LOADDATASET, "&Load Mesh","Load a polygon mesh")
 		self.Bind(wx.EVT_MENU, self.OnLoadMesh, menuOpenMesh)
@@ -448,14 +545,54 @@ class MeshViewerFrame(wx.Frame):
 		self.Bind(wx.EVT_MENU, self.OnSaveMeshMeters, menuSaveMeshMeters)
 		menuSaveScreenshot = filemenu.Append(MeshViewerFrame.ID_SAVESCREENSHOT, "&Save Screenshot", "Save a screenshot of the GL Canvas")
 		self.Bind(wx.EVT_MENU, self.OnSaveScreenshot, menuSaveScreenshot)
+		
+		menuSaveRotating = filemenu.Append(MeshViewerFrame.ID_SAVEROTATINGSCREENSOTS, "&Save Rotating Screenshots", "Save Auto Rotating Screenshots")
+		self.Bind(wx.EVT_MENU, self.glcanvas.saveAutoRotatingScreenshots, menuSaveRotating)
+		menuSaveLighting = filemenu.Append(MeshViewerFrame.ID_SAVELIGHTINGSCREENSHOTS, "&Save Lighting Sweep Screenshots", "Save Lighting Sweep Screenshots")
+		self.Bind(wx.EVT_MENU, self.glcanvas.saveLightSweepScreenshots, menuSaveLighting)	
+		
 		menuExit = filemenu.Append(wx.ID_EXIT,"E&xit"," Terminate the program")
 		self.Bind(wx.EVT_MENU, self.OnExit, menuExit)
+		
+		#####Operations menu
+		operationsMenu = wx.Menu()
+		#Menu option for deleting all but largest connected component
+		menuConnectedComponents = operationsMenu.Append(MeshViewerFrame.ID_CONNECTEDCOMPONENTS, "&Delete all but largest connected component", "Delete all but largest connected component")
+		self.Bind(wx.EVT_MENU, self.glcanvas.deleteConnectedComponents, menuConnectedComponents)
+		
+		#Menu option for truncating mesh
+		menuTruncate = operationsMenu.Append(MeshViewerFrame.ID_TRUNCATE, "&Truncate", "Truncate")
+		self.Bind(wx.EVT_MENU, self.glcanvas.Truncate, menuTruncate)
+		
+		#Menu option for filling holes
+		menuFillHoles = operationsMenu.Append(MeshViewerFrame.ID_FILLHOLES, "&Fill Holes", "Fill Holes")
+		self.Bind(wx.EVT_MENU, self.glcanvas.FillHoles, menuFillHoles)
+		
+		#Menu option for computing geodesic distance
+		menuGeodesicDistances = operationsMenu.Append(MeshViewerFrame.ID_GEODESICDISTANCES, "&Compute Geodesic Distances", "Compute Geodesic Distances")
+		self.Bind(wx.EVT_MENU, self.glcanvas.ComputeGeodesicDistances, menuGeodesicDistances)
+		
+		#Menu option for interpolating colors
+		menuInterpolateColors = operationsMenu.Append(MeshViewerFrame.ID_INTERPOLATECOLORS, "&Interpolate Random Colors", "Interpolate Random Colors")
+		self.Bind(wx.EVT_MENU, self.glcanvas.InterpolateRandomColors, menuInterpolateColors)		
+		
+		#Max planar symmetry
+		menuPRST = operationsMenu.Append(MeshViewerFrame.ID_PRST, "&Max Planar Symmetry", "Max Planar Symmetry")
+		self.Bind(wx.EVT_MENU, self.glcanvas.doPRST, menuPRST)
+		
+		
+		#####Laplacian Mesh Menu
+		laplacianMenu = wx.Menu()
+		menuSelectLaplaceVertices = laplacianMenu.Append(MeshViewerFrame.ID_SELECTLAPLACEVERTICES, "&Select Laplace Vertices", "Select Laplace Vertices")
+		self.Bind(wx.EVT_MENU, self.glcanvas.doLaplacianMeshSelectVertices, menuSelectLaplaceVertices)
+		
 		
 		# Creating the menubar.
 		menuBar = wx.MenuBar()
 		menuBar.Append(filemenu,"&File") # Adding the "filemenu" to the MenuBar
+		menuBar.Append(operationsMenu,"&Operations")
+		menuBar.Append(laplacianMenu, "&MeshLaplacian")
 		self.SetMenuBar(menuBar)  # Adding the MenuBar to the Frame content.
-		self.glcanvas = MeshViewerCanvas(self)
 		
 		self.rightPanel = wx.BoxSizer(wx.VERTICAL)
 		
@@ -504,58 +641,9 @@ class MeshViewerFrame(wx.Frame):
 		CutWithPlaneButton = wx.Button(self, -1, "Cut With Plane")
 		self.Bind(wx.EVT_BUTTON, self.glcanvas.CutWithPlane, CutWithPlaneButton)
 		self.rightPanel.Add(CutWithPlaneButton)
-		PRSTButton = wx.Button(self, -1, "Max Planar Symmetry")
-		self.Bind(wx.EVT_BUTTON, self.glcanvas.doPRST, PRSTButton)
-		self.rightPanel.Add(PRSTButton)
 		FlipAcrossPlaneButton = wx.Button(self, -1, "Flip Across Plane")
 		self.Bind(wx.EVT_BUTTON, self.glcanvas.FlipAcrossPlane, FlipAcrossPlaneButton)
 		self.rightPanel.Add(FlipAcrossPlaneButton)
-
-		#Button and text area for saving the rotating mesh
-		self.rightPanel.Add(wx.StaticText(self, label="Save Auto Rotating Screenshots"), 0, wx.EXPAND)
-		self.glcanvas.rotFilePrefixCtrl = wx.TextCtrl(self, -1, "Rotations")
-		self.rightPanel.Add(self.glcanvas.rotFilePrefixCtrl)
-		SaveAutoRotatingScreenshotsButton = wx.Button(self, -1, "Save Auto Rotating Screenshots")
-		self.Bind(wx.EVT_BUTTON, self.glcanvas.saveAutoRotatingScreenshots, SaveAutoRotatingScreenshotsButton )
-		self.rightPanel.Add(SaveAutoRotatingScreenshotsButton )
-
-		#Button and text area for saving the rotating light
-		self.rightPanel.Add(wx.StaticText(self, label="Save Light Sweeping Screenshots"), 0, wx.EXPAND)
-		self.glcanvas.lightFilePrefixCtrl = wx.TextCtrl(self, -1, "Lighting")
-		self.rightPanel.Add(self.glcanvas.lightFilePrefixCtrl)
-		SaveLightSweepScreenshotsButton = wx.Button(self, -1, "Save Light Sweeping Screenshots")
-		self.Bind(wx.EVT_BUTTON, self.glcanvas.saveLightSweepScreenshots, SaveLightSweepScreenshotsButton )
-		self.rightPanel.Add(SaveLightSweepScreenshotsButton)
-
-		#Button for deleting all but largest connected component
-		self.rightPanel.Add(wx.StaticText(self, label="Connected Components"), 0, wx.EXPAND)
-		ConnectedComponentsButton = wx.Button(self, -1, "Delete All But Largest Connected Component")
-		self.Bind(wx.EVT_BUTTON, self.glcanvas.deleteConnectedComponents, ConnectedComponentsButton)
-		self.rightPanel.Add(ConnectedComponentsButton)		
-		
-		#Button for truncating mesh
-		self.rightPanel.Add(wx.StaticText(self, label="Truncate and Bevel Mesh"), 0, wx.EXPAND)
-		TruncateButton = wx.Button(self, -1, "Truncate")
-		self.Bind(wx.EVT_BUTTON, self.glcanvas.Truncate, TruncateButton)
-		self.rightPanel.Add(TruncateButton)		
-		
-		#Button for filling holes
-		self.rightPanel.Add(wx.StaticText(self, label="Fill Holes"), 0, wx.EXPAND)
-		FillHolesButton = wx.Button(self, -1, "Fill Holes")
-		self.Bind(wx.EVT_BUTTON, self.glcanvas.FillHoles, FillHolesButton)
-		self.rightPanel.Add(FillHolesButton)
-		
-		#Button for computing geodesic distance
-		self.rightPanel.Add(wx.StaticText(self, label="Geodesic Distances"), 0, wx.EXPAND)
-		ComputeGeodesicButton = wx.Button(self, -1, "Compute Geodesic Distances")
-		self.Bind(wx.EVT_BUTTON, self.glcanvas.ComputeGeodesicDistances, ComputeGeodesicButton)
-		self.rightPanel.Add(ComputeGeodesicButton)
-		
-		#Button for interpolating colors
-		self.rightPanel.Add(wx.StaticText(self, label="Colors"), 0, wx.EXPAND)
-		InterpolateRandomColorsButton = wx.Button(self, -1, "Interpolate Random Colors")
-		self.Bind(wx.EVT_BUTTON, self.glcanvas.InterpolateRandomColors, InterpolateRandomColorsButton)
-		self.rightPanel.Add(InterpolateRandomColorsButton)
 
 		#Finally add the two main panels to the sizer		
 		self.sizer = wx.BoxSizer(wx.HORIZONTAL)
