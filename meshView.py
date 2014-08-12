@@ -84,8 +84,8 @@ class MeshViewerCanvas(glcanvas.GLCanvas):
 		self.lightIter = 0
 		
 		#State variables for laplacian mesh operations
-		self.selectedIndices = {} #Elements will be key-value pairs (idx, Point3D(new position))
-		self.currentIdx = -1
+		self.laplacianConstraints = {} #Elements will be key-value pairs (idx, Point3D(new position))
+		self.laplaceCurrentIdx = -1
 		
 		#Face mesh variables and manipulation variables
 		self.mesh = None
@@ -216,14 +216,23 @@ class MeshViewerCanvas(glcanvas.GLCanvas):
 		if self.mesh:
 			self.mesh.deleteAllButLargestConnectedComponent()
 
+	def splitFaces(self, evt):
+		if self.mesh:
+			self.mesh.splitFaces()
+			self.mesh.needsDisplayUpdate = True
+			self.mesh.needsIndexDisplayUpdate = True
+		self.Refresh()
+
 	def FillHoles(self, evt):
 		self.mesh.fillHoles()
 		self.mesh.needsDisplayUpdate = True
+		self.mesh.needsIndexDisplayUpdate = True
 		self.Refresh()
 	
 	def Truncate(self, evt):
 		self.mesh.truncate(0.5)
 		self.mesh.needsDisplayUpdate = True
+		self.mesh.needsIndexDisplayUpdate = True
 		self.Refresh()
 	
 	def ComputeGeodesicDistances(self, evt):
@@ -257,6 +266,7 @@ class MeshViewerCanvas(glcanvas.GLCanvas):
 		for i in range(0, N):
 			self.mesh.vertices[i].color = [a for a in colors[i]]
 		self.mesh.needsDisplayUpdate = True
+		self.mesh.needsIndexDisplayUpdate = True
 		self.Refresh()
 	
 	def doLaplacianMeshSelectVertices(self, evt):
@@ -264,6 +274,22 @@ class MeshViewerCanvas(glcanvas.GLCanvas):
 			self.GUIState = STATE_CHOOSELAPLACEVERTICES
 			self.GUISubstate = CHOOSELAPLACE_WAITING
 			self.Refresh()
+	
+	def clearLaplacianMeshSelection(self, evt):
+		self.laplacianConstraints.clear()
+		self.Refresh()
+	
+	def doLaplacianSolveWithConstraints(self, evt):
+		if self.mesh:
+			self.mesh.solveVertexPositionsWithConstraints(self.laplacianConstraints)
+		self.mesh.needsIndexDisplayUpdate = True
+		self.Refresh()
+
+	def doLaplacianMembraneWithConstraints(self, evt):
+		if self.mesh:
+			self.mesh.createMembraneSurface(self.laplacianConstraints)
+		self.mesh.needsIndexDisplayUpdate = True
+		self.Refresh()
 	
 	def processEraseBackgroundEvent(self, event): pass #avoid flashing on MSW.
 
@@ -348,11 +374,16 @@ class MeshViewerCanvas(glcanvas.GLCanvas):
 			glEnd()
 		
 		if self.displayCutPlane:
+			#TODO: Many invalid states are possible if laplacian constraints aren't
+			#cleared before other things happen
+			self.laplacianConstraints.clear()
+			farDist = (self.camera.eye - self.bbox.getCenter()).Length()*2
+			#This is to make sure we can see on the inside
+			farDist = max(farDist, self.unionbbox.getDiagLength()*2)
 			t = farDist*self.camera.towards
 			r = t % self.camera.up
 			u = farDist*self.camera.up
 			dP0 = farDist / 10.0
-			#dP0 = 1
 			P0 = self.camera.eye - (dP0/farDist/10.0)*r
 			cutPlaneMesh = getRectMesh(P0 + t + u, P0 + t - u, P0 - t - u, P0 - t + u)
 			glDisable(GL_LIGHTING)
@@ -419,39 +450,41 @@ class MeshViewerCanvas(glcanvas.GLCanvas):
 				self.drawMeshStandard()
 				glDisable(GL_LIGHTING)
 				glPointSize(10)
-				glColor3f(0, 0, 1)
 				glBegin(GL_POINTS)
-				for idx in self.selectedIndices:
+				for idx in self.laplacianConstraints:
+					if idx == self.laplaceCurrentIdx:
+						glColor3f(1, 0, 0)
+					else:
+						glColor3f(0, 0, 1)
 					P = self.mesh.vertices[idx].pos
+					glVertex3f(P.x, P.y, P.z)
+					P = self.laplacianConstraints[idx]
 					glVertex3f(P.x, P.y, P.z)
 				glEnd()
 				glColor3f(1, 1, 0)
 				glBegin(GL_LINES)
-				for idx in self.selectedIndices:
+				for idx in self.laplacianConstraints:
 					P1 = self.mesh.vertices[idx].pos
-					P2 = self.selectedIndices[idx]
+					P2 = self.laplacianConstraints[idx]
 					glVertex3f(P1.x, P1.y, P1.z)
 					glVertex3f(P2.x, P2.y, P2.z)
 				glEnd()
 				
 			elif self.GUISubstate == CHOOSELAPLACE_PICKVERTEX:
-				if self.mesh.IndexDisplayList == -1:
-					self.mesh.needsDisplayUpdate = True
 				glClearColor(0.0, 0.0, 0.0, 0.0)
 				glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT)
 				self.mesh.renderGLIndices()
-				saveImageGL(self, "out.png")
 				pixel = glReadPixels(self.MousePos[0], self.MousePos[1], 1, 1, GL_RGBA, GL_UNSIGNED_BYTE)
 				[R, G, B, A] = [int(pixel.encode("hex")[i*2:(i+1)*2], 16) for i in range(4)]
 				idx = extractFromRGBA(R, G, B, 0) - 1
-				if idx > 0 and idx < len(self.mesh.vertices)+1:
-					if idx in self.selectedIndices:
+				if idx >= 0 and idx < len(self.mesh.vertices):
+					if idx in self.laplacianConstraints:
 						#De-select if it's already selected
-						self.currentIdx = -1
-						self.selectedIndices.pop(idx, None)
+						self.laplaceCurrentIdx = -1
+						self.laplacianConstraints.pop(idx, None)
 					else:
-						self.selectedIndices[idx] = self.mesh.vertices[idx].pos.Copy()
-						self.currentIdx = idx
+						self.laplacianConstraints[idx] = self.mesh.vertices[idx].pos.Copy()
+						self.laplaceCurrentIdx = idx
 				self.GUISubstate = CHOOSELAPLACE_WAITING
 				self.Refresh()
 	
@@ -498,18 +531,24 @@ class MeshViewerCanvas(glcanvas.GLCanvas):
 		dX = self.MousePos[0] - lastX
 		dY = self.MousePos[1] - lastY
 		if evt.Dragging():
-			idx = self.currentIdx
-			if self.GUIState == STATE_CHOOSELAPLACEVERTICES and state.ControlDown() and self.currentIdx in self.selectedIndices:
-				#Move up laplacian mesh constraint
+			idx = self.laplaceCurrentIdx
+			if self.GUIState == STATE_CHOOSELAPLACEVERTICES and state.ControlDown() and self.laplaceCurrentIdx in self.laplacianConstraints:
+				#Move up laplacian mesh constraint based on where the user drags
+				#the mouse
 				t = self.camera.towards
 				u = self.camera.up
 				r = t % u
-				P0 = self.selectedIndices[idx]
+				P0 = self.laplacianConstraints[idx]
+				#Construct a plane going through the point which is parallel to the
+				#viewing plane
 				plane = Plane3D(P0, t)
-				view = glGetIntegerv(GL_VIEWPORT)
-				#TODO: Finish this
-				self.selectedIndices[idx] = self.selectedIndices[idx] + u
-				print self.selectedIndices[idx]
+				#Construct a ray through the pixel where the user is clicking
+				tanFOV = math.tan(self.camera.yfov/2)
+				scaleX = tanFOV*(self.MousePos[0] - self.size.x/2)/(self.size.x/2)
+				scaleY = tanFOV*(self.MousePos[1] - self.size.y/2)/(self.size.y/2)
+				V = t + scaleX*r + scaleY*u
+				ray = Ray3D(self.camera.eye, V)
+				self.laplacianConstraints[idx] = ray.intersectPlane(plane)[1]
 			else:
 				#Translate/rotate shape
 				if evt.MiddleIsDown():
@@ -522,7 +561,7 @@ class MeshViewerCanvas(glcanvas.GLCanvas):
 		self.Refresh()
 
 class MeshViewerFrame(wx.Frame):
-	(ID_LOADDATASET, ID_SAVEDATASET, ID_SAVEDATASETMETERS, ID_SAVESCREENSHOT, ID_CONNECTEDCOMPONENTS, ID_TRUNCATE, ID_FILLHOLES, ID_GEODESICDISTANCES, ID_PRST, ID_INTERPOLATECOLORS, ID_SAVEROTATINGSCREENSOTS, ID_SAVELIGHTINGSCREENSHOTS, ID_SELECTLAPLACEVERTICES) = (1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13)
+	(ID_LOADDATASET, ID_SAVEDATASET, ID_SAVEDATASETMETERS, ID_SAVESCREENSHOT, ID_CONNECTEDCOMPONENTS, ID_SPLITFACES, ID_TRUNCATE, ID_FILLHOLES, ID_GEODESICDISTANCES, ID_PRST, ID_INTERPOLATECOLORS, ID_SAVEROTATINGSCREENSOTS, ID_SAVELIGHTINGSCREENSHOTS, ID_SELECTLAPLACEVERTICES, ID_CLEARLAPLACEVERTICES, ID_SOLVEWITHCONSTRAINTS, ID_MEMBRANEWITHCONSTRAINTS) = (1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17)
 	
 	def __init__(self, parent, id, title, pos=DEFAULT_POS, size=DEFAULT_SIZE, style=wx.DEFAULT_FRAME_STYLE, name = 'GLWindow'):
 		style = style | wx.NO_FULL_REPAINT_ON_RESIZE
@@ -541,7 +580,7 @@ class MeshViewerFrame(wx.Frame):
 		self.Bind(wx.EVT_MENU, self.OnLoadMesh, menuOpenMesh)
 		menuSaveMesh = filemenu.Append(MeshViewerFrame.ID_SAVEDATASET, "&Save Mesh", "Save the edited polygon mesh")
 		self.Bind(wx.EVT_MENU, self.OnSaveMesh, menuSaveMesh)
-		menuSaveMeshMeters = filemenu.Append(MeshViewerFrame.ID_SAVEDATASET, "&Save Mesh in Meters", "Save the edited polygon mesh; convert from millimeters to meters")
+		menuSaveMeshMeters = filemenu.Append(MeshViewerFrame.ID_SAVEDATASETMETERS, "&Save Mesh in Meters", "Save the edited polygon mesh; convert from millimeters to meters")
 		self.Bind(wx.EVT_MENU, self.OnSaveMeshMeters, menuSaveMeshMeters)
 		menuSaveScreenshot = filemenu.Append(MeshViewerFrame.ID_SAVESCREENSHOT, "&Save Screenshot", "Save a screenshot of the GL Canvas")
 		self.Bind(wx.EVT_MENU, self.OnSaveScreenshot, menuSaveScreenshot)
@@ -559,6 +598,10 @@ class MeshViewerFrame(wx.Frame):
 		#Menu option for deleting all but largest connected component
 		menuConnectedComponents = operationsMenu.Append(MeshViewerFrame.ID_CONNECTEDCOMPONENTS, "&Delete all but largest connected component", "Delete all but largest connected component")
 		self.Bind(wx.EVT_MENU, self.glcanvas.deleteConnectedComponents, menuConnectedComponents)
+
+		#Menu option for splitting faces
+		menuSplitFaces = operationsMenu.Append(MeshViewerFrame.ID_SPLITFACES, "&Split Faces", "Split Faces")
+		self.Bind(wx.EVT_MENU, self.glcanvas.splitFaces, menuSplitFaces)
 		
 		#Menu option for truncating mesh
 		menuTruncate = operationsMenu.Append(MeshViewerFrame.ID_TRUNCATE, "&Truncate", "Truncate")
@@ -585,6 +628,15 @@ class MeshViewerFrame(wx.Frame):
 		laplacianMenu = wx.Menu()
 		menuSelectLaplaceVertices = laplacianMenu.Append(MeshViewerFrame.ID_SELECTLAPLACEVERTICES, "&Select Laplace Vertices", "Select Laplace Vertices")
 		self.Bind(wx.EVT_MENU, self.glcanvas.doLaplacianMeshSelectVertices, menuSelectLaplaceVertices)
+		
+		menuClearLaplaceVertices = laplacianMenu.Append(MeshViewerFrame.ID_CLEARLAPLACEVERTICES, "&Clear vertex selection", "Clear Vertex Selection")
+		self.Bind(wx.EVT_MENU, self.glcanvas.clearLaplacianMeshSelection, menuClearLaplaceVertices)
+		
+		menuSolveWithConstraints = laplacianMenu.Append(MeshViewerFrame.ID_SOLVEWITHCONSTRAINTS, "&Solve with Constraints", "Solve with Constraints")
+		self.Bind(wx.EVT_MENU, self.glcanvas.doLaplacianSolveWithConstraints, menuSolveWithConstraints)
+
+		menuMembraneWithConstraints = laplacianMenu.Append(MeshViewerFrame.ID_MEMBRANEWITHCONSTRAINTS, "&Membrane Surface with Constraints", "Membrane Surface with Constraints")
+		self.Bind(wx.EVT_MENU, self.glcanvas.doLaplacianMembraneWithConstraints, menuMembraneWithConstraints)
 		
 		
 		# Creating the menubar.
@@ -671,8 +723,6 @@ class MeshViewerFrame(wx.Frame):
 			self.glcanvas.meshCentroid = self.glcanvas.mesh.getCentroid()
 			self.glcanvas.meshPrincipalAxes = self.glcanvas.mesh.getPrincipalAxes()
 			print "Finished loading mesh\n %s"%self.glcanvas.mesh
-			#print "Deleting all but largest connected component..."
-			#self.glcanvas.mesh.deleteAllButLargestConnectedComponent()
 			print self.glcanvas.mesh
 			self.glcanvas.bbox = self.glcanvas.mesh.getBBox()
 			print "Mesh BBox: %s\n"%self.glcanvas.bbox

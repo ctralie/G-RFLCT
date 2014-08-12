@@ -55,6 +55,14 @@ class MeshVertex(object):
 				ret.add(edge.f2)
 		return ret
 	
+	#Return the area of the one-ring faces attached to this vertex
+	def getOneRingArea(self):
+		faces = self.getAttachedFaces()
+		ret = 0.0
+		for f in faces:
+			ret = ret + f.getArea()
+		return ret
+	
 	#Get an estimate of the vertex normal by taking a weighted
 	#average of normals of attached faces
 	def getNormal(self):
@@ -248,6 +256,7 @@ class PolyMesh(object):
 		self.colorBuffer = -1
 		self.triIndexBuffer = -1
 		self.needsDisplayUpdate = True
+		self.needsIndexDisplayUpdate = True
 		self.drawFaces = 1
 		self.drawEdges = 0
 		self.drawVerts = 0
@@ -395,6 +404,7 @@ class PolyMesh(object):
 				if e.ID != -1: #If the edge has not already been removed
 					self.removeEdge(e)
 		self.needsDisplayUpdate = True
+		self.needsIndexDisplayUpdate = True
 	
 	#Split every face into N triangles by creating a vertex at
 	#the centroid of each face
@@ -412,6 +422,7 @@ class PolyMesh(object):
 				newVerts = [v1, v2, centroid]
 				newFace = self.addFace(newVerts)
 		self.needsDisplayUpdate = True
+		self.needsIndexDisplayUpdate = True
 	
 	def starRemesh(self):
 		#Copy over the face list since it's about to be modified
@@ -469,6 +480,7 @@ class PolyMesh(object):
 				v2 = verts[i+1]
 				newFace = self.addFace([v0, v1, v2])
 		self.needsDisplayUpdate = True
+		self.needsIndexDisplayUpdate = True
 
 	#For every vertex, create a new vertex a parameter t [0-0.5] of
 	#the way along each of its N attached edges, and then "chop off"
@@ -602,6 +614,7 @@ class PolyMesh(object):
 			for v in self.vertices:
 				v.component = 0
 		self.needsDisplayUpdate = True
+		self.needsIndexDisplayUpdate = True
 	
 	#Fill hole with the "advancing front" method
 	#but keep it simple for now; not tests for self intersections
@@ -656,6 +669,7 @@ class PolyMesh(object):
 				print "Found hole of size %i"%len(loop)
 				self.fillHole(loop)
 		self.needsDisplayUpdate = True
+		self.needsIndexDisplayUpdate = True
 
 	#############################################################
 	####                 GEOMETRY METHODS                   #####
@@ -821,6 +835,7 @@ class PolyMesh(object):
 		if fillHoles:
 			self.fillHoles(slicedHolesOnly = True)
 		self.needsDisplayUpdate = True
+		self.needsIndexDisplayUpdate = True
 	
 	def sliceAbovePlane(self, plane, fillHoles = True):
 		planeNeg = Plane3D(plane.P0, plane.N)
@@ -837,6 +852,7 @@ class PolyMesh(object):
 			dPPerp = dP - dPPar
 			V.pos = P0 - dPPar + dPPerp
 		self.needsDisplayUpdate = True
+		self.needsIndexDisplayUpdate = True
 	
 	#############################################################
 	####                INPUT/OUTPUT METHODS                #####
@@ -850,6 +866,7 @@ class PolyMesh(object):
 		else:
 			print "Unsupported file suffix (%s) for loading mesh"%(suffix, filename)
 		self.needsDisplayUpdate = True
+		self.needsIndexDisplayUpdate = True
 	
 	def saveFile(self, filename, verbose = False):
 		suffix = re.split("\.", filename)[-1]
@@ -922,8 +939,8 @@ class PolyMesh(object):
 		nE = len(self.edges)
 		nF = len(self.faces)
 		fout = open(filename, "w")
-		fout.write("#Generated with Chris Tralie's G-RFLCT Library\n")
-		fout.write("#http://www.github.com/ctralie/G-RFLCT\n")
+		#fout.write("#Generated with Chris Tralie's G-RFLCT Library\n")
+		#fout.write("#http://www.github.com/ctralie/G-RFLCT\n")
 		fout.write("OFF\n%i %i %i\n"%(nV, nF, 0))
 		for v in self.vertices:
 			P = v.pos
@@ -1111,10 +1128,11 @@ class PolyMesh(object):
 	#in the vertex list.  Used to help with vertex selection (will work as long as
 	#there are fewer than 2^32 vertices)
 	def renderGLIndices(self):
-		if self.needsDisplayUpdate:
+		if self.needsIndexDisplayUpdate:
 			if self.IndexDisplayList != -1: #Deallocate previous display list
 				glDeleteLists(self.IndexDisplayList, 1)
 			self.IndexDisplayList = glGenLists(1)
+			print "Updating index display list"
 			glNewList(self.IndexDisplayList, GL_COMPILE)
 			glDisable(GL_LIGHTING)
 			N = len(self.vertices)
@@ -1134,7 +1152,7 @@ class PolyMesh(object):
 			glEnd()
 			glEnable(GL_LIGHTING)
 			glEndList()
-			self.needsDisplayUpdate = False
+			self.needsIndexDisplayUpdate = False
 		glCallList(self.IndexDisplayList)	
 
 	#vertexColors is an Nx3 numpy array, where N is the number of vertices

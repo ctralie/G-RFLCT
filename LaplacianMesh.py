@@ -31,6 +31,8 @@ def LaplaceBeltramiWeightFunc(v1, v2, v3, v4):
 		w = w + getCotangent(v1, v2, v3)
 	if v4:
 		w = w + getCotangent(v1, v2, v4)
+	#TODO: Fix area scaling
+	#return (3.0/(2.0*v1.oneRingArea))*w
 	return w
 
 def UmbrellaWeightFunc(v1, v2, v3, v4):
@@ -46,6 +48,8 @@ class LaplacianMesh(PolyMesh):
 		V = []
 		overwriteIdx = 0
 		for v1 in self.vertices:
+			#Precompute 1-ring areas
+			v1.oneRingArea = v1.getOneRingArea()
 			i = v1.ID
 			if overwriteRows:
 				if overwriteIdx < len(overwriteRows):
@@ -102,7 +106,7 @@ class LaplacianMesh(PolyMesh):
 		(I, J, V) = self.getLaplacianSparseMatrixCoords(overwriteRows, LaplaceBeltramiWeightFunc)
 		NVerts = len(self.vertices)
 		NConstraints = g.shape[0]
-		Y = g.shape[1]
+		Y = deltaCoords.shape[1]
 		for i in range(NConstraints):
 			constraint = constraints[i]
 			for elem in constraint:
@@ -112,7 +116,9 @@ class LaplacianMesh(PolyMesh):
 				V.append(val)
 		N = NVerts + NConstraints
 		M = NVerts
-		b = np.append(deltaCoords, g, axis = 0)
+		b = deltaCoords
+		if g.shape[0] > 0:
+			b = np.append(deltaCoords, g, axis = 0)
 		I = np.array(I)
 		J = np.array(J)
 		V = np.array(V)
@@ -126,7 +132,7 @@ class LaplacianMesh(PolyMesh):
 		return ret
 	
 	#Make a call to solveFunctionWithConstraints and update positions
-	#constraints are in the form [(index, Position), ...]
+	#constraints are a dictionary of the form {index: Position}
 	#Update the vertex positions with the results
 	def solveVertexPositionsWithConstraints(self, constraints):
 		#TODO: Some wasted computation computing laplacian matrix twice
@@ -140,17 +146,38 @@ class LaplacianMesh(PolyMesh):
 		deltaCoords = A*x
 		constraintsToPass = []
 		g = np.zeros((len(constraints), 3))
-		for i in range(len(constraints)):
-			(index, P) = constraints[i]
+		i = 0
+		for index in constraints:
+			P = constraints[index]
 			constraintsToPass.append([(index, 1)])
 			g[i] = [P.x, P.y, P.z]
+			i = i+1
 		newPos = self.solveFunctionWithConstraints(constraintsToPass, deltaCoords, g)
 		for i in range(N):
 			self.vertices[i].pos = Point3D(newPos[i, 0], newPos[i, 1], newPos[i, 2])
+		self.needsDisplayUpdate = True
+		self.needsIndexDisplayUpdate = True
 
-	#anchoredVertices: array of the form [(index, Position)]
-	def createMembraneSurface(self, anchoredVertices):
-		print "TODO"
+	#Make a "soap bubble" surface
+	#anchoredVertices: dictionary of the form {index: Position}
+	def createMembraneSurface(self, constraints):
+		[I, J, V] = self.getLaplacianSparseMatrixCoords()
+		N = len(self.vertices)
+		deltaCoords = np.zeros((N, 3))
+		constraintsToPass = []
+		#g = np.zeros((len(constraints), 3))
+		g = np.zeros((0, 0))
+		i = 0
+		for index in constraints:
+			P = constraints[index]
+			constraintsToPass.append([(index, 1)])
+			deltaCoords[i] = [P.x, P.y, P.z]
+			i = i+1
+		newPos = self.solveFunctionWithConstraints([], deltaCoords, g, constraintsToPass)
+		for i in range(N):
+			self.vertices[i].pos = Point3D(newPos[i, 0], newPos[i, 1], newPos[i, 2])
+		self.needsDisplayUpdate = True
+		self.needsIndexDisplayUpdate = True
 
 if __name__ == '__main__':
 	mesh1 = getBoxMesh()
