@@ -21,6 +21,8 @@ import os
 import math
 import time
 from time import sleep
+from pylab import cm
+import matplotlib.pyplot as plt
 
 DEFAULT_SIZE = wx.Size(1200, 800)
 DEFAULT_POS = wx.Point(10, 10)
@@ -86,6 +88,8 @@ class MeshViewerCanvas(glcanvas.GLCanvas):
 		#State variables for laplacian mesh operations
 		self.laplacianConstraints = {} #Elements will be key-value pairs (idx, Point3D(new position))
 		self.laplaceCurrentIdx = -1
+		self.eigvalues = np.zeros(0)
+		self.eigvectors = np.zeros(0)
 		
 		#Face mesh variables and manipulation variables
 		self.mesh = None
@@ -119,6 +123,12 @@ class MeshViewerCanvas(glcanvas.GLCanvas):
 		wx.EVT_MIDDLE_UP(self, self.MouseUp)
 		wx.EVT_MOTION(self, self.MouseMotion)		
 		#self.initGL()
+	
+	def invalidateMesh(self):
+		self.eigvalues = np.zeros(0)
+		self.eigvectors = np.zeros(0)
+		self.needsDisplayUpdate = True
+		self.needsIndexDisplayUpdate = True
 	
 	def initPointCloud(self, pointCloud):
 		self.pointCloud = pointCloud
@@ -157,7 +167,7 @@ class MeshViewerCanvas(glcanvas.GLCanvas):
 
 	def useLightingCheckbox(self, evt):
 		self.useLighting = evt.Checked()
-		self.mesh.needsDisplayUpdate = True
+		self.needsDisplayUpdate = True
 		self.Refresh()
 	
 	def CutWithPlane(self, evt):
@@ -219,20 +229,19 @@ class MeshViewerCanvas(glcanvas.GLCanvas):
 	def splitFaces(self, evt):
 		if self.mesh:
 			self.mesh.splitFaces()
-			self.mesh.needsDisplayUpdate = True
-			self.mesh.needsIndexDisplayUpdate = True
+			self.invalidateMesh()
 		self.Refresh()
 
 	def FillHoles(self, evt):
-		self.mesh.fillHoles()
-		self.mesh.needsDisplayUpdate = True
-		self.mesh.needsIndexDisplayUpdate = True
+		if self.mesh:
+			self.mesh.fillHoles()
+			self.invalidateMesh()
 		self.Refresh()
 	
 	def Truncate(self, evt):
-		self.mesh.truncate(0.5)
-		self.mesh.needsDisplayUpdate = True
-		self.mesh.needsIndexDisplayUpdate = True
+		if self.mesh:
+			self.mesh.truncate(0.5)
+			self.invalidateMesh()
 		self.Refresh()
 	
 	def ComputeGeodesicDistances(self, evt):
@@ -282,14 +291,50 @@ class MeshViewerCanvas(glcanvas.GLCanvas):
 	def doLaplacianSolveWithConstraints(self, evt):
 		if self.mesh:
 			self.mesh.solveVertexPositionsWithConstraints(self.laplacianConstraints)
-		self.mesh.needsIndexDisplayUpdate = True
+		self.invalidateMesh()
 		self.Refresh()
 
 	def doLaplacianMembraneWithConstraints(self, evt):
 		if self.mesh:
 			self.mesh.createMembraneSurface(self.laplacianConstraints)
-		self.mesh.needsIndexDisplayUpdate = True
+		self.invalidateMesh()
 		self.Refresh()
+
+	def getHeatKernelSignature(self, evt):
+		dlg = wx.TextEntryDialog(None,'Time Parameter','Choose Time Parameter', '1')
+		if dlg.ShowModal() == wx.ID_OK:
+			t = float(dlg.GetValue())
+			k = min(100, len(self.mesh.vertices)-1)
+			cmConvert = cm.get_cmap("jet")
+			(x, self.eigvalues, self.eigvectors) = self.mesh.getHKS(k, t, self.eigvalues, self.eigvectors)
+			plt.subplot(1, 2, 1)
+			plt.plot(self.eigvalues)
+			plt.title('Laplace Beltrami Eigenvalues')
+			plt.subplot(1, 2, 2)
+			plt.plot(np.exp(-t*self.eigvalues))
+			plt.title('Exponential Factors')
+			plt.show()
+			x = x/np.max(x)
+			for i in range(len(self.mesh.vertices)):
+				self.mesh.vertices[i].color = cmConvert(x[i])
+			self.mesh.needsDisplayUpdate = True
+			self.Refresh()
+		dlg.Destroy()
+
+	def getHeatFlow(self, evt):
+		dlg = wx.TextEntryDialog(None,'Time Parameter','Choose Time Parameter', '1')
+		if dlg.ShowModal() == wx.ID_OK:
+			indices = [a for a in self.laplacianConstraints]
+			t = float(dlg.GetValue())
+			k = min(100, len(self.mesh.vertices)-1)
+			cmConvert = cm.get_cmap("jet")
+			(x, self.eigvalues, self.eigvectors) = self.mesh.getHeatFlowFromPoints(indices, k, t, self.eigvalues, self.eigvectors)
+			x = x/np.max(x)
+			for i in range(len(self.mesh.vertices)):
+				self.mesh.vertices[i].color = cmConvert(x[i])
+			self.mesh.needsDisplayUpdate = True
+			self.Refresh()
+		dlg.Destroy()
 	
 	def processEraseBackgroundEvent(self, event): pass #avoid flashing on MSW.
 
@@ -561,7 +606,7 @@ class MeshViewerCanvas(glcanvas.GLCanvas):
 		self.Refresh()
 
 class MeshViewerFrame(wx.Frame):
-	(ID_LOADDATASET, ID_SAVEDATASET, ID_SAVEDATASETMETERS, ID_SAVESCREENSHOT, ID_CONNECTEDCOMPONENTS, ID_SPLITFACES, ID_TRUNCATE, ID_FILLHOLES, ID_GEODESICDISTANCES, ID_PRST, ID_INTERPOLATECOLORS, ID_SAVEROTATINGSCREENSOTS, ID_SAVELIGHTINGSCREENSHOTS, ID_SELECTLAPLACEVERTICES, ID_CLEARLAPLACEVERTICES, ID_SOLVEWITHCONSTRAINTS, ID_MEMBRANEWITHCONSTRAINTS) = (1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17)
+	(ID_LOADDATASET, ID_SAVEDATASET, ID_SAVEDATASETMETERS, ID_SAVESCREENSHOT, ID_CONNECTEDCOMPONENTS, ID_SPLITFACES, ID_TRUNCATE, ID_FILLHOLES, ID_GEODESICDISTANCES, ID_PRST, ID_INTERPOLATECOLORS, ID_SAVEROTATINGSCREENSOTS, ID_SAVELIGHTINGSCREENSHOTS, ID_SELECTLAPLACEVERTICES, ID_CLEARLAPLACEVERTICES, ID_SOLVEWITHCONSTRAINTS, ID_MEMBRANEWITHCONSTRAINTS, ID_GETHKS, ID_GETHEATFLOW) = (1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19)
 	
 	def __init__(self, parent, id, title, pos=DEFAULT_POS, size=DEFAULT_SIZE, style=wx.DEFAULT_FRAME_STYLE, name = 'GLWindow'):
 		style = style | wx.NO_FULL_REPAINT_ON_RESIZE
@@ -623,7 +668,6 @@ class MeshViewerFrame(wx.Frame):
 		menuPRST = operationsMenu.Append(MeshViewerFrame.ID_PRST, "&Max Planar Symmetry", "Max Planar Symmetry")
 		self.Bind(wx.EVT_MENU, self.glcanvas.doPRST, menuPRST)
 		
-		
 		#####Laplacian Mesh Menu
 		laplacianMenu = wx.Menu()
 		menuSelectLaplaceVertices = laplacianMenu.Append(MeshViewerFrame.ID_SELECTLAPLACEVERTICES, "&Select Laplace Vertices", "Select Laplace Vertices")
@@ -637,6 +681,13 @@ class MeshViewerFrame(wx.Frame):
 
 		menuMembraneWithConstraints = laplacianMenu.Append(MeshViewerFrame.ID_MEMBRANEWITHCONSTRAINTS, "&Membrane Surface with Constraints", "Membrane Surface with Constraints")
 		self.Bind(wx.EVT_MENU, self.glcanvas.doLaplacianMembraneWithConstraints, menuMembraneWithConstraints)
+		
+		#Get heat kernel signature
+		menuHKS = laplacianMenu.Append(MeshViewerFrame.ID_GETHKS, "&Get Heat Kernel Signature", "Get Heat Kernel Signature")
+		self.Bind(wx.EVT_MENU, self.glcanvas.getHeatKernelSignature, menuHKS)
+		
+		menuHeatFlow = laplacianMenu.Append(MeshViewerFrame.ID_GETHEATFLOW, "&Get Heat Flow from Vertices", "Get Heat Flow from Selected Vertices")
+		self.Bind(wx.EVT_MENU, self.glcanvas.getHeatFlow, menuHeatFlow)
 		
 		
 		# Creating the menubar.

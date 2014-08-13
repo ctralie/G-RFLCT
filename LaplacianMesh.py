@@ -8,7 +8,7 @@ import re
 import math
 import numpy as np
 from scipy import sparse
-from scipy.sparse.linalg import lsqr, cg
+from scipy.sparse.linalg import lsqr, cg, eigsh
 from scipy.spatial import Delaunay
 import matplotlib.pyplot as plt
 
@@ -178,6 +178,46 @@ class LaplacianMesh(PolyMesh):
 			self.vertices[i].pos = Point3D(newPos[i, 0], newPos[i, 1], newPos[i, 2])
 		self.needsDisplayUpdate = True
 		self.needsIndexDisplayUpdate = True
+	
+	#Return the first k eigenvectors of the Laplace-Beltrami operator
+	def getHKSEigenvectors(self, k):
+		N = len(self.vertices)
+		[I, J, V] = self.getLaplacianSparseMatrixCoords()
+		A = sparse.coo_matrix((V, (I, J)), shape=(N, N)).tocsr()
+		#Make symmetric so that the eigenvalues are real
+		A = 0.5*(A + A.transpose())
+		print "Computing %i eigenvalues for a mesh with %i vertices..."%(k, N)
+		(eigvalues, eigvectors) = eigsh(A, k, which='SM')
+		print "Finished computing eigenvalues"
+		eigvalues[0] = 0
+		return (eigvalues, eigvectors)
+	
+	#Return the Heat Kernel Signature of the shape
+	#k: The number of eigenvalues to take to approximate the HKS
+	#t: The timescale of the approximation
+	#eigalues/eigvectors: If they have been precomputed don't recompute them
+	def getHKS(self, k, t, eigvalues = None, eigvectors = None):
+		N = len(self.vertices)
+		if eigvalues.shape[0] == 0 or eigvectors.shape[0] == 0:
+			(eigvalues, eigvectors) = self.getHKSEigenvectors(k)
+		expScale = np.exp(-eigvalues*t)
+		V = np.array(np.exp(-eigvalues*t))*eigvectors
+		V = V*V
+		V = np.sqrt(V.sum(1))
+		return (V, eigvalues, eigvectors)
+	
+	#Return the heat flow from the vertices at "indices" after a specified
+	#amount of time
+	def getHeatFlowFromPoints(self, indices, k, t, eigvalues = None, eigvectors = None):
+		N = len(self.vertices)
+		initConditions = np.zeros((N, 1))
+		initConditions[indices] = 1 #Start heat flow off at the selected vertices
+		if eigvalues.shape[0] == 0 or eigvectors.shape[0] == 0:
+			(eigvalues, eigvectors) = self.getHKSEigenvectors(k)
+		expScale = np.exp(-eigvalues*t)
+		coeffs = expScale*( ((eigvectors.transpose()).dot(initConditions)).flatten() )
+		V = coeffs*eigvectors
+		return (V.sum(1), eigvalues, eigvectors)
 
 if __name__ == '__main__':
 	mesh1 = getBoxMesh()
@@ -186,7 +226,7 @@ if __name__ == '__main__':
 	mesh.vertices = mesh1.vertices
 	mesh.edges = mesh1.edges
 	mesh.faces = mesh1.faces
-	constraints = [[(1, 1)], [(3, 1)]]
-	g = np.array([[1], [1]])
-	x = mesh.solveFunctionWithConstraints(constraints, g)
-	print x
+	N = len(mesh.vertices)
+	print N
+	(eigenvalues, eigenvectors) = mesh.getHKSEigenvectors(6)
+	print eigenvalues
