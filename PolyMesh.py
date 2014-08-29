@@ -7,6 +7,28 @@ import sys
 import re
 import numpy as np
 import numpy.linalg as linalg
+try:
+    from PIL.Image import open as imgopen
+except ImportError, err:
+    from Image import open as imgopen
+
+
+def loadTexture(filename):
+	im = imgopen(filename)
+	try:
+		im = im.convert('RGB')
+		ix, iy, image = im.size[0], im.size[1], im.tostring("raw", "RGBA", 0, -1)
+	except SystemError:
+		ix, iy, image = im.size[0], im.size[1], im.tostring("raw", "RGBX", 0, -1)
+	assert ix*iy*4 == len(image), """Unpacked image size for texture is incorrect"""
+	
+	texID = glGenTextures(1)
+	glBindTexture(GL_TEXTURE_2D, texID)
+	glPixelStorei(GL_UNPACK_ALIGNMENT, 1)
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR)
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR)
+	glTexImage2D(GL_TEXTURE_2D, 0, 3, ix, iy, 0, GL_RGBA, GL_UNSIGNED_BYTE, image)
+	return texID
 
 #Used to help sort edges in CCW order
 class EdgesCCWComparator(object):
@@ -30,6 +52,7 @@ class EdgesCCWComparator(object):
 class MeshVertex(object):
 	def __init__(self, P, ID):
 		self.pos = P
+		self.texCoords = [0.0, 0.0] #Texture coordinate
 		self.ID = ID
 		self.edges = set() #Store reference to all emanating edges
 		#NOTE: Edges are not guaranteed to be in any particular order
@@ -147,6 +170,7 @@ class MeshFace(object):
 			P = v.pos
 			if v.color:
 				glColor3f(v.color[0], v.color[1], v.color[2])
+			glTexCoord2f(v.texCoords[0], v.texCoords[1])
 			glVertex3f(P.x, P.y, P.z)
 		glEnd()
 	
@@ -252,9 +276,7 @@ class PolyMesh(object):
 	def __init__(self):
 		self.DisplayList = -1
 		self.IndexDisplayList = -1
-		self.vertexBuffer = -1
-		self.colorBuffer = -1
-		self.triIndexBuffer = -1
+		self.texID = None #Texture ID
 		self.needsDisplayUpdate = True
 		self.needsIndexDisplayUpdate = True
 		self.drawFaces = 1
@@ -413,6 +435,7 @@ class PolyMesh(object):
 			#TODO: Implement normal meshes this way (move centroid along normal)??
 			centroidP = f.getCentroid()
 			centroid = self.addVertex(centroidP)
+			#TODO: Update texture coordinates properly
 			verts = f.getVertices()
 			#Remove face and replace with N triangles
 			self.removeFace(f)
@@ -434,6 +457,7 @@ class PolyMesh(object):
 		for e in self.edges:
 			pos = e.getCenter()
 			e.centerVertex = self.addVertex(pos)
+			e.centerVertex.texCoords = [0.5*e.v1.texCoords[i] + 0.5*e.v2.texCoords[i] for i in range(2)]
 		facesToAdd = []
 		for f in self.faces:
 			#Add the faces along the outside
@@ -794,9 +818,12 @@ class PolyMesh(object):
 						[t, P] = line.intersectPlane(plane)
 						if P:
 							newColor = None
+							newTexCoords = [0.0, 0.0]
 							if v1.color and v2.color:
 								newColor = [(1-t)*v1.color[a] + t*v2.color[a] for a in range(0, 3)]
+							newTexCoords = [(1-t)*v1.texCoords[i] + t*v2.texCoords[i] for i in range(2)]
 							e.centerVertex = self.addVertex(P, newColor)
+							e.centerVertex.texCoords = newTexCoords
 							e.centerVertex.borderVertex = True
 							borderVertex = e.centerVertex
 					if e.centerVertex:
@@ -861,6 +888,8 @@ class PolyMesh(object):
 		suffix = re.split("\.", filename)[-1]
 		if suffix == "off":
 			self.loadOffFile(filename)
+		elif suffix == "toff":
+			self.loadTOffFile(filename)
 		elif suffix == "obj":
 			self.loadObjFile(filename)
 		else:
@@ -933,6 +962,46 @@ class PolyMesh(object):
 					for v2 in self.vertices:
 						v2.color = [a/255.0 for a in v2.color]
 					break
+	
+	#My own "TOFF" format, which is like OFF with texture
+	def loadTOffFile(self, filename):
+		fin = open(filename, 'r')
+		nVertices = 0
+		nFaces = 0
+		nEdges = 0
+		lineCount = 0
+		face = 0
+		vertex = 0
+		textureName = ""
+		for line in fin:
+			lineCount = lineCount+1
+			fields = line.split() #Splits whitespace by default
+			if len(fields) == 0: #Blank line
+				continue
+			if fields[0][0] in ['#', '\0', ' '] or len(fields[0]) == 0:
+				continue
+			#Check section
+			if nVertices == 0:
+				if fields[0] == "TOFF":
+					textureName = fields[1]
+					self.texID = loadTexture(textureName)	
+				else:
+					fields[0:3] = [int(field) for field in fields]
+					[nVertices, nFaces, nEdges] = fields[0:3]
+			elif vertex < nVertices:
+				fields = [float(i) for i in fields]
+				P = Point3D(fields[0],fields[1], fields[2])
+				v = self.addVertex(P)
+				v.texCoords = [fields[3], fields[4]]
+				vertex = vertex+1
+			elif face < nFaces:
+				#Assume the vertices are specified in CCW order
+				fields = [int(i) for i in fields]
+				meshVerts = fields[1:fields[0]+1]
+				verts = [self.vertices[i] for i in meshVerts]
+				self.addFace(verts)
+				face = face+1
+		fin.close()
 			
 	def saveOffFile(self, filename, verbose = False, outputColors = True, output255 = False):
 		nV = len(self.vertices)
@@ -1067,6 +1136,9 @@ class PolyMesh(object):
 				glDeleteLists(self.DisplayList, 1)
 			self.DisplayList = glGenLists(1)
 			glNewList(self.DisplayList, GL_COMPILE)
+			if self.texID:
+				glEnable(GL_TEXTURE_2D)
+				glBindTexture(GL_TEXTURE_2D, self.texID)
 			if self.drawFaces:
 				if lightingOn:
 					glEnable(GL_LIGHTING)
@@ -1153,62 +1225,7 @@ class PolyMesh(object):
 			glEnable(GL_LIGHTING)
 			glEndList()
 			self.needsIndexDisplayUpdate = False
-		glCallList(self.IndexDisplayList)	
-
-	#vertexColors is an Nx3 numpy array, where N is the number of vertices
-	def renderGLTriBuffers(self):
-		#TODO: Finish this
-		if self.needsDisplayUpdate:
-			if self.vertexBuffer != -1:
-				glDeleteBuffers(1, self.vertexBuffer)
-			if self.colorBuffer != -1:
-				glDeleteBuffers(1, self.colorBuffer)
-			if self.triIndexBuffer != -1:
-				glDeleteBuffers(1, self.triIndexBuffer)
-			
-			#Set up vertex buffer
-			self.vertexBuffer = glGenBuffers(1)
-			glBindBuffer(GL_ARRAY_BUFFER, self.vertexBuffer)
-			self.vertexBufferData = [0.0]*(3*len(self.vertices))
-			for i in range(len(self.vertices)):
-				P = self.vertices[i].pos
-				self.vertexBufferData[i*3] = P.x
-				self.vertexBufferData[i*3+1] = P.y
-				self.vertexBufferData[i*3+2] = P.z
-			self.vertexBufferData = np.array(self.vertexBufferData, dtype=np.float32)
-			glBufferData(GL_ARRAY_BUFFER, len(self.vertexBufferData), self.vertexBufferData, GL_DYNAMIC_DRAW)
-			
-			#Set up color buffer
-			self.colorBuffer = glGenBuffers(1)
-			glBindBuffer(GL_ARRAY_BUFFER, self.colorBuffer)
-			self.colorBufferData = [0]*(3*len(self.vertices))
-			for i in range(len(self.vertices)):
-				C = [0.0, 0.0, 0.0]
-				if self.vertices[i].color:
-					C = self.vertices[i].color
-				self.colorBufferData[i*3:(i+1)*3] = C
-			self.colorBufferData = np.array(self.colorBufferData, dtype=np.float32)
-			glBufferData(GL_ARRAY_BUFFER, len(self.colorBufferData), self.colorBufferData, GL_DYNAMIC_DRAW)
-			
-			#Set up the triangle buffer
-			self.triIndexBuffer = glGenBuffers(1)
-			glBindBuffer(GL_ARRAY_BUFFER, self.triIndexBuffer)
-			self.triBufferData = [0]*(3*len(self.faces))
-			for i in range(len(self.faces)):
-				Vs = [V.ID for V in self.faces[i].getVertices()]
-				self.triBufferData[i*3:(i+1)*3] = Vs
-			self.triBufferData = np.array(self.triBufferData, dtype=np.float32)
-			self.needsDisplayUpdate = False
-		
-		glDisable(GL_LIGHTING)
-		glBindBuffer(GL_ARRAY_BUFFER, self.vertexBuffer)
-		#glVertexPointerd(self.vertexBuffer)
-		#glBindBuffer(GL_COLOR_BUFFER, self.colorBuffer)
-		#glColorPointer(3, GL_FLOAT, 12, self.colorBuffer)
-		glBindBuffer(GL_VERTEX_ARRAY, self.triIndexBuffer)
-		
-		glEnable(GL_LIGHTING)
-		glDrawArrays(GL_TRIANGLES, 0, len(self.triIndexBuffer))
+		glCallList(self.IndexDisplayList)
 	
 	#Slow version with no spatial subdivision
 	def getRayIntersection(self, ray):

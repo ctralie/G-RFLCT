@@ -314,7 +314,7 @@ class MeshViewerCanvas(glcanvas.GLCanvas):
 			plt.plot(np.exp(-t*self.eigvalues))
 			plt.title('Exponential Factors')
 			plt.show()
-			x = x/np.max(x)
+			#x = x/np.max(x) #Should already be in the range [0, 1]
 			for i in range(len(self.mesh.vertices)):
 				self.mesh.vertices[i].color = cmConvert(x[i])
 			self.mesh.needsDisplayUpdate = True
@@ -329,7 +329,7 @@ class MeshViewerCanvas(glcanvas.GLCanvas):
 			k = min(100, len(self.mesh.vertices)-1)
 			cmConvert = cm.get_cmap("jet")
 			(x, self.eigvalues, self.eigvectors) = self.mesh.getHeatFlowFromPoints(indices, k, t, self.eigvalues, self.eigvectors)
-			x = x/np.max(x)
+			#x = x/np.max(x) #Should already be in the range [0, 1]
 			for i in range(len(self.mesh.vertices)):
 				self.mesh.vertices[i].color = cmConvert(x[i])
 			self.mesh.needsDisplayUpdate = True
@@ -762,7 +762,7 @@ class MeshViewerFrame(wx.Frame):
 		self.Show()
 	
 	def OnLoadMesh(self, evt):
-		dlg = wx.FileDialog(self, "Choose a file", ".", "", "OBJ files (*.obj)|*.obj|OFF files (*.off)|*.off", wx.OPEN)
+		dlg = wx.FileDialog(self, "Choose a file", ".", "", "OBJ files (*.obj)|*.obj|OFF files (*.off)|*.off|TOFF files (*.toff)|*.toff", wx.OPEN)
 		if dlg.ShowModal() == wx.ID_OK:
 			filename = dlg.GetFilename()
 			dirname = dlg.GetDirectory()
