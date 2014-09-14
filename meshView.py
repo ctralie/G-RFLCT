@@ -101,6 +101,7 @@ class MeshViewerCanvas(glcanvas.GLCanvas):
 		self.displayMeshNormals = False
 		self.displayPrincipalAxes = False
 		self.useLighting = True
+		self.useTexture = True
 		self.vertexColors = np.zeros(0)
 
 		self.PRSTPlaneMesh = None
@@ -170,6 +171,11 @@ class MeshViewerCanvas(glcanvas.GLCanvas):
 		self.needsDisplayUpdate = True
 		self.Refresh()
 	
+	def useTextureCheckbox(self, evt):
+		self.useTexture = evt.Checked()
+		self.needsDisplayUpdate = True
+		self.Refresh()	
+	
 	def CutWithPlane(self, evt):
 		if self.cutPlane:
 			self.mesh.sliceBelowPlane(self.cutPlane, False)
@@ -217,7 +223,7 @@ class MeshViewerCanvas(glcanvas.GLCanvas):
 			self.lightPhi = -math.pi/2
 			self.lightTheta = 0
 			self.lightIter = 0
-			self.camera.centerOnBBox(self.bbox, theta = -math.pi/2, phi = math.pi/2)
+			#self.camera.centerOnBBox(self.bbox, theta = -math.pi/2, phi = math.pi/2)
 			self.zCenter = (self.bbox.zmax + self.bbox.zmin) / 2.0
 			self.Refresh()
 		dlg.Destroy()
@@ -365,7 +371,7 @@ class MeshViewerCanvas(glcanvas.GLCanvas):
 			glMaterialfv(GL_FRONT_AND_BACK, GL_AMBIENT_AND_DIFFUSE, [0.8, 0.8, 0.8, 1.0]);
 			glMaterialfv(GL_FRONT_AND_BACK, GL_SPECULAR, [0.2, 0.2, 0.2, 1.0])
 			glMaterialfv(GL_FRONT_AND_BACK, GL_SHININESS, 64)
-			self.mesh.renderGL(self.displayMeshEdges, self.displayMeshVertices, self.displayMeshNormals, self.displayMeshFaces, self.useLighting, None)
+			self.mesh.renderGL(self.displayMeshEdges, self.displayMeshVertices, self.displayMeshNormals, self.displayMeshFaces, self.useLighting, self.useTexture)
 			#self.mesh.renderGLTriBuffers()
 			if self.displayPrincipalAxes:
 				(Axis1, Axis2, Axis3, maxProj, minProj, axes)	= self.meshPrincipalAxes
@@ -464,7 +470,7 @@ class MeshViewerCanvas(glcanvas.GLCanvas):
 			glMaterialfv(GL_FRONT_AND_BACK, GL_AMBIENT_AND_DIFFUSE, [0.8, 0.8, 0.8, 1.0]);
 			glMaterialfv(GL_FRONT_AND_BACK, GL_SPECULAR, [0.2, 0.2, 0.2, 1.0])
 			glMaterialfv(GL_FRONT_AND_BACK, GL_SHININESS, 64)
-			self.mesh.renderGL(self.displayMeshEdges, self.displayMeshVertices, self.displayMeshNormals, self.displayMeshFaces, self.useLighting, None)
+			self.mesh.renderGL(self.displayMeshEdges, self.displayMeshVertices, self.displayMeshNormals, self.displayMeshFaces, self.useLighting, self.useTexture)
 			saveImageGL(self, "%s%i.png"%(self.lightingScreenshotsPrefix, self.lightIter))
 			self.lightPhi = self.lightPhi + 0.05
 			self.lightIter = self.lightIter + 1
@@ -734,6 +740,10 @@ class MeshViewerFrame(wx.Frame):
 		self.useLightingCheckbox.SetValue(True)
 		self.Bind(wx.EVT_CHECKBOX, self.glcanvas.useLightingCheckbox, self.useLightingCheckbox)
 		self.rightPanel.Add(self.useLightingCheckbox, 0, wx.EXPAND)
+		self.useTextureCheckbox = wx.CheckBox(self, label = "Use Texture")
+		self.useTextureCheckbox.SetValue(True)
+		self.Bind(wx.EVT_CHECKBOX, self.glcanvas.useTextureCheckbox, self.useTextureCheckbox)
+		self.rightPanel.Add(self.useTextureCheckbox, 0, wx.EXPAND)
 
 		#Checkboxes and buttons for manipulating the cut plane
 		self.rightPanel.Add(wx.StaticText(self, label="Cutting Plane"), 0, wx.EXPAND)

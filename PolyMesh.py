@@ -171,6 +171,8 @@ class MeshFace(object):
 			if v.color:
 				glColor3f(v.color[0], v.color[1], v.color[2])
 			glTexCoord2f(v.texCoords[0], v.texCoords[1])
+			N = v.getNormal()
+			glNormal3f(N.x, N.y, N.z)
 			glVertex3f(P.x, P.y, P.z)
 		glEnd()
 	
@@ -283,6 +285,8 @@ class PolyMesh(object):
 		self.drawEdges = 0
 		self.drawVerts = 0
 		self.drawNormals = 0
+		self.doLighting = True
+		self.useTexture = True
 		self.vertices = []
 		self.edges = []
 		self.faces = []
@@ -1118,7 +1122,7 @@ class PolyMesh(object):
 	#############################################################
 	
 	#vertexColors is an Nx3 numpy array, where N is the number of vertices
-	def renderGL(self, drawEdges = 0, drawVerts = 0, drawNormals = 0, drawFaces = 1, lightingOn = True, extraVerts = None ):
+	def renderGL(self, drawEdges = 0, drawVerts = 0, drawNormals = 0, drawFaces = 1, lightingOn = True, useTexture = True ):
 		if self.drawFaces != drawFaces:
 			self.drawFaces = drawFaces
 			self.needsDisplayUpdate = True
@@ -1131,22 +1135,30 @@ class PolyMesh(object):
 		if self.drawNormals != drawNormals:
 			self.drawNormals = drawNormals
 			self.needsDisplayUpdate = True
+		if self.doLighting != lightingOn:
+			self.doLighting = lightingOn
+			self.needsDisplayUpdate = True
+		if self.useTexture != useTexture:
+			self.useTexture = useTexture
+			self.needsDisplayUpdate = True
 		if self.needsDisplayUpdate:
 			if self.DisplayList != -1: #Deallocate previous display list
 				glDeleteLists(self.DisplayList, 1)
 			self.DisplayList = glGenLists(1)
 			glNewList(self.DisplayList, GL_COMPILE)
-			if self.texID:
+			if self.texID and self.useTexture:
 				glEnable(GL_TEXTURE_2D)
 				glBindTexture(GL_TEXTURE_2D, self.texID)
+			else:
+				glDisable(GL_TEXTURE_2D)
 			if self.drawFaces:
-				if lightingOn:
+				if self.doLighting:
 					glEnable(GL_LIGHTING)
 					glColor3f(0.5, 0.5, 0.5)
 				else:
 					glDisable(GL_LIGHTING)
 				for f in self.faces:
-					f.drawFilled(doLighting = lightingOn)
+					f.drawFilled(drawNormal = False, doLighting = self.doLighting)
 			if self.drawEdges:
 				glDisable(GL_LIGHTING)
 				glColor3f(0, 0, 1)
@@ -1181,15 +1193,6 @@ class PolyMesh(object):
 					P2 = P1 + 0.05*v.getNormal()
 					glVertex3f(P1.x, P1.y, P1.z)
 					glVertex3f(P2.x, P2.y, P2.z)
-				glEnd()
-			if extraVerts:
-				glDisable(GL_LIGHTING)
-				glColor3f(1, 1, 0)
-				glPointSize(5)
-				glBegin(GL_POINTS)
-				for v in extraVerts:
-					P = v.pos
-					glVertex3f(P.x, P.y, P.z)
 				glEnd()
 			glEnable(GL_LIGHTING)
 			glEndList()
