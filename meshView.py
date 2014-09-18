@@ -54,7 +54,78 @@ def saveImage(canvas, filename):
 	m.Blit(0, 0, w, h, s, 70, 0)
 	m.SelectObject(wx.NullBitmap)
 	b.SaveFile(filename, wx.BITMAP_TYPE_PNG)
-	
+
+class RotationScreenshotsDialog(wx.Dialog):
+	def __init__(self, *args, **kw):
+		super(RotationScreenshotsDialog, self).__init__(*args, **kw)
+		#Remember parameters from last time
+		self.filePrefixDef = args[0].rotfilePrefix
+		self.startAngleDef = args[0].rotstartAngle
+		self.endAngleDef = args[0].rotendAngle
+		self.angleIncDef = args[0].rotangleInc
+		self.InitUI()
+		self.SetSize((250, 200))
+		self.SetTitle("Delay Series Parameters")
+
+	def InitUI(self):
+		pnl = wx.Panel(self)
+		vbox = wx.BoxSizer(wx.VERTICAL)
+
+		sb = wx.StaticBox(pnl, label='Parameters')
+		sbs = wx.StaticBoxSizer(sb, orient=wx.VERTICAL)
+
+		hbox1 = wx.BoxSizer(wx.HORIZONTAL)        
+		hbox1.Add(wx.StaticText(pnl, label='File Prefix'))
+		self.filePrefix = wx.TextCtrl(pnl)
+		self.filePrefix.SetValue(self.filePrefixDef)
+		hbox1.Add(self.filePrefix, flag=wx.LEFT, border=5)
+		sbs.Add(hbox1)
+
+		hbox2 = wx.BoxSizer(wx.HORIZONTAL)        
+		hbox2.Add(wx.StaticText(pnl, label='Start Angle'))
+		self.startAngle = wx.TextCtrl(pnl)
+		self.startAngle.SetValue("%g"%self.startAngleDef)
+		hbox2.Add(self.startAngle, flag=wx.LEFT, border=5)
+		sbs.Add(hbox2)
+		
+		hbox3 = wx.BoxSizer(wx.HORIZONTAL)        
+		hbox3.Add(wx.StaticText(pnl, label='End Angle'))
+		self.endAngle = wx.TextCtrl(pnl)
+		self.endAngle.SetValue("%g"%self.endAngleDef)
+		hbox3.Add(self.endAngle, flag=wx.LEFT, border=5)
+		sbs.Add(hbox3)
+		
+		hbox4 = wx.BoxSizer(wx.HORIZONTAL)        
+		hbox4.Add(wx.StaticText(pnl, label='Angle Increment'))
+		self.angleInc = wx.TextCtrl(pnl)
+		self.angleInc.SetValue("%g"%self.angleIncDef)
+		hbox4.Add(self.angleInc, flag=wx.LEFT, border=5)
+		sbs.Add(hbox4)
+
+		pnl.SetSizer(sbs)
+
+		hboxexit = wx.BoxSizer(wx.HORIZONTAL)
+		okButton = wx.Button(self, label='Ok')
+		closeButton = wx.Button(self, label='Close')
+		hboxexit.Add(okButton)
+		hboxexit.Add(closeButton, flag=wx.LEFT, border=5)
+
+		vbox.Add(pnl, proportion=1, 
+		flag=wx.ALL|wx.EXPAND, border=5)
+		vbox.Add(hboxexit, 
+		flag=wx.ALIGN_CENTER|wx.TOP|wx.BOTTOM, border=10)
+
+		self.SetSizer(vbox)
+
+		okButton.Bind(wx.EVT_BUTTON, self.OnClose)
+		closeButton.Bind(wx.EVT_BUTTON, self.OnClose)
+
+	def OnClose(self, e):
+		self.filePrefix = self.filePrefix.GetValue()
+		self.startAngle = float(self.startAngle.GetValue())
+		self.endAngle = float(self.endAngle.GetValue())
+		self.angleInc = float(self.angleInc.GetValue())
+		self.Destroy()
 
 class MeshViewerCanvas(glcanvas.GLCanvas):
 	def __init__(self, parent):
@@ -80,7 +151,12 @@ class MeshViewerCanvas(glcanvas.GLCanvas):
 		random.seed()
 		
 		#State variables for saving screenshots
+		self.rotfilePrefix = "Rotation"
+		self.rotstartAngle = -50
+		self.rotendAngle = 50
+		self.rotangleInc = 5
 		self.rotAngle = 0
+		
 		self.lightPhi = 0
 		self.lightTheta = 0
 		self.lightIter = 0
@@ -205,15 +281,16 @@ class MeshViewerCanvas(glcanvas.GLCanvas):
 			self.Refresh()
 
 	def saveAutoRotatingScreenshots(self, evt):
+		paramsDlg = RotationScreenshotsDialog(self)
+		paramsDlg.ShowModal()
+		paramsDlg.Destroy()
+		[self.rotfilePrefix, self.rotstartAngle, self.rotendAngle, self.rotangleInc] = [paramsDlg.filePrefix, paramsDlg.startAngle, paramsDlg.endAngle, paramsDlg.angleInc]
 		dlg = wx.TextEntryDialog(None,'File Prefix Name','Saving Rotation Sweep', 'Rotation')
-		if dlg.ShowModal() == wx.ID_OK:
-			self.rotatingScreenshotsPrefix = dlg.GetValue()
-			self.GUIState = STATE_SAVEROTATIONS
-			self.rotAngle = -80
-			self.camera.centerOnBBox(self.bbox, theta = -math.pi/2, phi = math.pi/2)
-			self.zCenter = (self.bbox.zmax + self.bbox.zmin) / 2.0
-			self.Refresh()
-		dlg.Destroy()
+		self.GUIState = STATE_SAVEROTATIONS
+		self.rotAngle = self.rotstartAngle
+		self.camera.centerOnBBox(self.bbox, theta = -math.pi/2, phi = math.pi/2)
+		self.zCenter = (self.bbox.zmax + self.bbox.zmin) / 2.0
+		self.Refresh()
 
 	def saveLightSweepScreenshots(self, evt):
 		dlg = wx.TextEntryDialog(None,'File Prefix Name','Saving Lighting Sweep', 'Lighting')
@@ -231,6 +308,9 @@ class MeshViewerCanvas(glcanvas.GLCanvas):
 	def deleteConnectedComponents(self, evt):
 		if self.mesh:
 			self.mesh.deleteAllButLargestConnectedComponent()
+		#Update mesh bbox now that the geometry has changed
+		self.bbox = self.mesh.getBBox()
+		self.camera.centerOnBBox(self.bbox, theta = -math.pi/2, phi = math.pi/2)
 
 	def splitFaces(self, evt):
 		if self.mesh:
@@ -485,14 +565,13 @@ class MeshViewerCanvas(glcanvas.GLCanvas):
 			glMaterialfv(GL_FRONT_AND_BACK, GL_AMBIENT_AND_DIFFUSE, [0.8, 0.8, 0.8, 1.0]);
 			glMaterialfv(GL_FRONT_AND_BACK, GL_SPECULAR, [0.2, 0.2, 0.2, 1.0])
 			glMaterialfv(GL_FRONT_AND_BACK, GL_SHININESS, 64)
-			self.mesh.renderGL(self.displayMeshEdges, self.displayMeshVertices, self.displayMeshNormals, self.displayMeshFaces, self.useLighting, None)
 			glTranslatef(0, 0, self.zCenter)
 			glRotatef(self.rotAngle, 0, 1, 0)
 			glTranslatef(0, 0, -self.zCenter)
-			self.mesh.renderGL(self.displayMeshEdges, self.displayMeshVertices, self.displayMeshNormals, self.displayMeshFaces, self.useLighting, None)
-			saveImageGL(self, "%s%i.png"%(self.rotatingScreenshotsPrefix, self.rotAngle))
-			self.rotAngle = self.rotAngle + 5
-			if self.rotAngle > 80:
+			self.mesh.renderGL(self.displayMeshEdges, self.displayMeshVertices, self.displayMeshNormals, self.displayMeshFaces, self.useLighting, self.useTexture)
+			saveImageGL(self, "%s%i.png"%(self.rotfilePrefix, self.rotAngle))
+			self.rotAngle = self.rotAngle + self.rotangleInc
+			if self.rotAngle > self.rotendAngle:
 				self.GUIState = STATE_NORMAL
 			self.SwapBuffers()
 			self.Refresh()

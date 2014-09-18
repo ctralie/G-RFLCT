@@ -153,7 +153,7 @@ class MeshFace(object):
 			self.centroid = ret
 		return self.centroid
 
-	def drawFilled(self, drawNormal = True, doLighting = True):
+	def drawFilled(self, drawNormal = True, doLighting = True, useTexture = True):
 		if doLighting:
 			if drawNormal:
 				normal = self.getNormal()
@@ -161,16 +161,17 @@ class MeshFace(object):
 					glNormal3f(normal.x, normal.y, normal.z)
 		verts = self.getVertices()
 		if doLighting:
-			if verts[0].color:
+			if verts[0].color and not useTexture:
 				glColorMaterial(GL_FRONT_AND_BACK, GL_AMBIENT_AND_DIFFUSE)
 				glEnable(GL_COLOR_MATERIAL)
 			var = 1
 		glBegin(GL_POLYGON)
 		for v in verts:
 			P = v.pos
-			if v.color:
+			if useTexture:
+				glTexCoord2f(v.texCoords[0], v.texCoords[1])
+			elif v.color:
 				glColor3f(v.color[0], v.color[1], v.color[2])
-			glTexCoord2f(v.texCoords[0], v.texCoords[1])
 			N = v.getNormal()
 			glNormal3f(N.x, N.y, N.z)
 			glVertex3f(P.x, P.y, P.z)
@@ -1158,7 +1159,7 @@ class PolyMesh(object):
 				else:
 					glDisable(GL_LIGHTING)
 				for f in self.faces:
-					f.drawFilled(drawNormal = False, doLighting = self.doLighting)
+					f.drawFilled(drawNormal = False, doLighting = self.doLighting, useTexture = useTexture)
 			if self.drawEdges:
 				glDisable(GL_LIGHTING)
 				glColor3f(0, 0, 1)
