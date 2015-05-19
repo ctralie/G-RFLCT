@@ -471,6 +471,9 @@ def arePlanar(verts):
 	for i in range(3, len(verts)):
 		v = verts[i] - verts[0]
 		v.normalize()
+		if n.squaredMag() == 0:
+			#If the first few points happenedt to be colinear
+			n = v0%v
 		if abs(v.Dot(n)) > EPS_AREPLANAR:
 			return False
 	return True
